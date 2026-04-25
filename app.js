@@ -2036,6 +2036,7 @@ on('#toolReset', 'click', () => {
     }
 });
 on('#toolCancel', 'click', () => closeEditor(true));
+on('#editorCloseX', 'click', () => closeEditor(true));
 on('#toolFinish', 'click', saveEditor);
 on('#toolSwap', 'click', () => $('#swapFileInput')?.click());
 on('#swapFileInput', 'change', (e) => {

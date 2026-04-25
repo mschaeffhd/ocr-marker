@@ -409,24 +409,20 @@
 
     <!-- Image Editor Modal -->
     <div id="imageEditor" class="editor-modal" style="display:none;">
+        <button class="editor-close-x" id="editorCloseX" title="Schließen">✕</button>
         <div class="editor-toolbar">
-            <div class="editor-title">
-                <span>🖼️ Bild bearbeiten</span>
-                <span class="editor-filename" id="editorFname"></span>
-            </div>
-            <div class="editor-tools">
-                <button class="tool-btn" id="toolCrop" title="Zuschneiden">✂️ Zuschneiden</button>
-                <button class="tool-btn" id="toolBrush" title="Pinsel">🖌️ Pinsel</button>
-                <button class="tool-btn" id="toolEyedropper" title="Pipette">💧 Pipette</button>
+            <div class="editor-toolbar-scroll">
+                <button class="tool-btn" id="toolCrop" title="Zuschneiden">✂️</button>
+                <button class="tool-btn" id="toolBrush" title="Pinsel">🖌️</button>
+                <button class="tool-btn" id="toolEyedropper" title="Pipette">💧</button>
                 <input type="color" id="brushColor" value="#ff0000" title="Farbe wählen">
-                <label class="editor-label">Größe:</label>
                 <input type="range" id="brushSize" min="1" max="50" value="10" title="Pinselgröße">
-                <span id="brushSizeVal">10</span>
-                <button class="tool-btn" id="toolUndo" title="Rückgängig">↩️ Undo</button>
-                <button class="tool-btn" id="toolSwap" title="Bild tauschen">🔄 Tauschen</button>
+                <span id="brushSizeVal" class="editor-size-val">10</span>
+                <button class="tool-btn" id="toolUndo" title="Rückgängig">↩️</button>
+                <button class="tool-btn" id="toolSwap" title="Bild tauschen">🔄</button>
                 <input type="file" id="swapFileInput" accept="image/*" style="display:none;">
-                <button class="tool-btn tool-danger" id="toolReset" title="Zurücksetzen">↩️ Reset</button>
-                <button class="tool-btn tool-primary" id="toolFinish" title="Speichern & KI-Neu">✅ Speichern & KI</button>
+                <button class="tool-btn tool-danger" id="toolReset" title="Zurücksetzen">↩️</button>
+                <button class="tool-btn tool-primary" id="toolFinish" title="Speichern & KI-Neu">✅</button>
                 <button class="tool-btn tool-cancel" id="toolCancel" title="Schließen">✕</button>
             </div>
         </div>
