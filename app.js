@@ -1652,6 +1652,10 @@ let editorState = {
 
 function openEditor(fname) {
     if (!fname || !state.images[fname]) return;
+    
+    // CRITICAL: open flag must be set BEFORE img.src assignment
+    // because base64 images load synchronously!
+    editorState.open = true;
     editorState.fname = fname;
     editorState.originalB64 = state.images[fname];
     editorState.tool = 'brush';
@@ -1667,22 +1671,36 @@ function openEditor(fname) {
     document.querySelectorAll('#imageEditor .tool-btn').forEach(b => b.classList.remove('active'));
     $('#toolBrush')?.classList.add('active');
     
+    // Robust image loading: handle both raw base64 and data URLs
+    let imgSrc = editorState.originalB64;
+    if (!imgSrc.startsWith('data:')) {
+        imgSrc = 'data:image/jpeg;base64,' + imgSrc;
+    }
+    
     const img = new Image();
     img.onload = function() {
+        if (!editorState.open) return; // user closed before load
         editorState.canvas = $('#editorCanvas');
+        if (!editorState.canvas) return;
+        
         const maxW = window.innerWidth - 40;
         const maxH = window.innerHeight - 140;
         const scale = Math.min(maxW / img.width, maxH / img.height, 1);
         editorState.scale = scale;
         editorState.canvas.width = Math.round(img.width * scale);
         editorState.canvas.height = Math.round(img.height * scale);
+        
         editorState.ctx = editorState.canvas.getContext('2d');
         editorState.ctx.drawImage(img, 0, 0, editorState.canvas.width, editorState.canvas.height);
+        
         pushUndo();
         setupEditorEvents();
     };
-    img.src = `data:image/jpeg;base64,${editorState.originalB64}`;
-    editorState.open = true;
+    img.onerror = function() {
+        showToast('Bild konnte nicht geladen werden', 'error');
+        closeEditor();
+    };
+    img.src = imgSrc;
 }
 
 function closeEditor() {
@@ -1970,6 +1988,13 @@ function applyCrop() {
 
 function saveEditor() {
     if (!editorState.canvas || !editorState.fname) return;
+    
+    // Remove crop overlay before saving so it doesn't become part of the image
+    if (editorState.cropRect) {
+        editorState.cropRect = null;
+        redrawCanvas();
+    }
+    
     const b64 = editorState.canvas.toDataURL('image/jpeg', 0.95).replace(/^data:image\/jpeg;base64,/, '');
     state.images[editorState.fname] = b64;
     comparePageMap = buildComparePageMap();
