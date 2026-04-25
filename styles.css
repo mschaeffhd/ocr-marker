@@ -545,58 +545,6 @@ body {
     color: var(--primary);
 }
 
-.thumbnails-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 16px;
-    padding: 16px 24px;
-}
-
-.image-thumb {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    overflow: hidden;
-    position: relative;
-    transition: var(--transition);
-}
-
-.image-thumb img {
-    width: 100%;
-    height: 100px;
-    object-fit: cover;
-}
-
-.thumb-label {
-    padding: 6px;
-    font-size: 0.75rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    background: var(--bg-card);
-}
-
-.thumb-check {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    background: var(--success);
-    color: white;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    opacity: 0;
-    transition: var(--transition);
-}
-
-.image-thumb.completed .thumb-check {
-    opacity: 1;
-}
-
 /* ===== Progress Bar ===== */
 .progress-container {
     padding: 16px 24px;
@@ -944,66 +892,6 @@ body {
 .progress-label {
     font-size: 0.85rem;
     color: var(--text-muted);
-}
-
-/* ===== Image Thumbnails ===== */
-.image-thumbnails {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    max-height: 200px;
-    overflow-y: auto;
-}
-
-.image-thumb {
-    width: 80px;
-    height: 60px;
-    border-radius: 6px;
-    overflow: hidden;
-    border: 2px solid var(--border);
-    position: relative;
-    flex-shrink: 0;
-}
-
-.image-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.image-thumb .thumb-label {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: rgba(0,0,0,0.75);
-    color: white;
-    font-size: 0.6rem;
-    padding: 2px 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.image-thumb .thumb-check {
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    background: var(--success);
-    color: white;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.6rem;
-    opacity: 0;
-    transition: var(--transition);
-}
-
-.image-thumb.described .thumb-check {
-    opacity: 1;
 }
 
 /* ===== Markdown Actions ===== */
@@ -1750,22 +1638,6 @@ body {
 }
 
 /* ===== Comparison View ===== */
-.compare-toggle-bar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin: 16px 0;
-    padding: 12px;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-}
-
-.compare-toggle-info {
-    color: var(--text-muted);
-    font-size: 0.85rem;
-}
-
 .compare-view {
     margin: 16px 0;
     background: var(--bg-card);

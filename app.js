@@ -57,7 +57,6 @@ let compareViewOpen = false;
 let compareCurrentPage = '1';
 let comparePageMap = {}; // {pageNum: {pdfPage, extractedImages[], descriptions[]}}
 let compareZoom = 1.0;
-let compareHqMode = false;
 
 // ===== Markdown Sync State =====
 let mdPageOffsets = {}; // {pageNum: htmlElementId}
@@ -270,7 +269,6 @@ async function describeImages() {
     
     safeStyle('#describeProgress', 'display', 'block');
     safeStyle('#describeLog', 'display', 'block');
-    safeHTML('#imageThumbnails', '');
     
     const total = filenames.length;
     
@@ -280,27 +278,6 @@ async function describeImages() {
         
         safeStyle('#progressFill', 'width', `${progress}%`);
         safeText('#progressLabel', `${i + 1} / ${total} Bilder`);
-        
-        // Create thumbnail safely
-        const thumbnailsContainer = $('#imageThumbnails');
-        if (thumbnailsContainer) {
-            const thumb = document.createElement('div');
-            thumb.id = `thumb-${i}`;
-            thumb.className = 'image-thumb';
-            thumb.innerHTML = `
-                <img src="data:image/jpeg;base64,${state.images[fname]}" alt="${fname}">
-                <div class="thumb-label">${fname}</div>
-                <div class="thumb-check">✓</div>
-            `;
-            thumb.style.cursor = 'pointer';
-            thumb.title = 'Klicken zum Bearbeiten';
-            thumb.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                openImageEditor(i);
-            });
-            thumbnailsContainer.appendChild(thumb);
-        }
         
         try {
             debugLog(`Anfrage Bildbeschreibung für ${fname}...`, 'debug');
@@ -347,10 +324,6 @@ async function describeImages() {
             if (data.choices && data.choices[0]?.message?.content) {
                 const desc = data.choices[0].message.content.trim();
                 state.descriptions[fname] = desc;
-                
-                // Mark thumbnail as completed
-                const thumb = $(`#thumb-${i}`);
-                if (thumb) thumb.classList.add('completed');
                 
                 addLog('describeLog', `Erfolg: ${fname}`, 'success');
             } else {
@@ -649,17 +622,10 @@ async function runPipeline() {
         btnStart.disabled = false;
         showLoading(false);
         
-        // Enable comparison view button after pipeline completes
-        const compareBtn = $('#btnToggleCompare');
-        const compareInfo = $('#compareToggleInfo');
-        if (compareBtn) {
-            compareBtn.disabled = false;
-        }
-        if (compareInfo) {
-            const imgCount = Object.keys(state.images).length;
-            compareInfo.textContent = imgCount > 0 
-                ? `${imgCount} Bilder erkannt – Klicken zum Vergleichen` 
-                : 'Keine Bilder erkannt';
+        // Auto-open comparison view after pipeline completes
+        const imgCount = Object.keys(state.images).length;
+        if (imgCount > 0) {
+            setTimeout(() => openCompareView(), 500);
         }
     }
 }
@@ -970,7 +936,6 @@ function showPdfZoomContent(overlay, src, pageNum) {
             <button class="btn btn-icon pdf-zoom-prev" title="Vorherige Seite">◀</button>
             <span class="pdf-zoom-page-info">Seite ${pageNum} / ${pdfTotalPages}</span>
             <input type="number" class="pdf-zoom-page-input" min="1" max="${pdfTotalPages}" value="${pageNum}" title="Zu Seite springen">
-            <button class="btn btn-icon pdf-zoom-go" title="Springen">➜</button>
             <button class="btn btn-icon pdf-zoom-next" title="Nächste Seite">▶</button>
             <div style="flex:1;"></div>
             <button class="btn btn-icon pdf-zoom-close-btn" title="Schließen">✕</button>
@@ -983,7 +948,6 @@ function showPdfZoomContent(overlay, src, pageNum) {
     // Navigation events
     const prevBtn = overlay.querySelector('.pdf-zoom-prev');
     const nextBtn = overlay.querySelector('.pdf-zoom-next');
-    const goBtn = overlay.querySelector('.pdf-zoom-go');
     const pageInput = overlay.querySelector('.pdf-zoom-page-input');
     const closeBtn = overlay.querySelector('.pdf-zoom-close-btn');
     
@@ -999,16 +963,17 @@ function showPdfZoomContent(overlay, src, pageNum) {
         if (current < pdfTotalPages) navigatePdfZoom(overlay, current + 1);
     });
     
-    goBtn?.addEventListener('click', (e) => {
-        e.stopPropagation();
+    // Blur (focus loss) triggers page navigation
+    pageInput?.addEventListener('blur', () => {
         const target = Number(pageInput.value);
-        if (target >= 1 && target <= pdfTotalPages) navigatePdfZoom(overlay, target);
+        if (target >= 1 && target <= pdfTotalPages && target !== Number(overlay.dataset.currentPage)) {
+            navigatePdfZoom(overlay, target);
+        }
     });
     
     pageInput?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
-            const target = Number(pageInput.value);
-            if (target >= 1 && target <= pdfTotalPages) navigatePdfZoom(overlay, target);
+            pageInput.blur();
         }
     });
     
@@ -1119,18 +1084,17 @@ on('#btnReset', 'click', () => {
         dropZone.style.display = 'block';
         if ($('#fileInfo')) $('#fileInfo').style.display = 'none';
         
-        $$('.pipeline-step').forEach(step => {
-            step.classList.remove('active', 'completed', 'error');
-            const status = step.querySelector('.step-status');
-            if (status) status.textContent = 'Wartend';
-        });
-        
-        $$('.step-log').forEach(log => { log.innerHTML = ''; log.style.display = 'none'; });
         if ($('#conversionStats')) $('#conversionStats').style.display = 'none';
         if ($('#describeProgress')) $('#describeProgress').style.display = 'none';
-        if ($('#imageThumbnails')) $('#imageThumbnails').innerHTML = '';
         if ($('#uploadSummary')) $('#uploadSummary').style.display = 'none';
         if ($('#uploadPath')) $('#uploadPath').style.display = 'none';
+        
+        // Clear inputs
+        if ($('#apiToken')) $('#apiToken').value = '';
+        if ($('#openwebuiUrl')) $('#openwebuiUrl').value = CONFIG.openwebuiUrl;
+        if ($('#bookName')) $('#bookName').value = '';
+        
+        // Clear output
         if ($('#mdSource')) $('#mdSource').textContent = '';
         if ($('#mdRendered')) $('#mdRendered').innerHTML = '';
         
@@ -1146,13 +1110,6 @@ on('#btnReset', 'click', () => {
         
         // Reset comparison view
         closeCompareView();
-        const compareBtn = $('#btnToggleCompare');
-        if (compareBtn) {
-            compareBtn.disabled = true;
-            compareBtn.textContent = '🔍 Seitenweiser Vergleich';
-        }
-        const compareInfo = $('#compareToggleInfo');
-        if (compareInfo) compareInfo.textContent = 'Nach Pipeline-Start verfügbar';
         
         showToast('Zurückgesetzt', 'info');
     }
@@ -1681,463 +1638,6 @@ if (apiField && !apiField.value) {
     }, 600);
 }
 
-// ===== Image Editor (Fabric.js) =====
-let editorState = {
-    open: false,
-    currentThumbIndex: -1,
-    originalB64: null,
-    originalFname: null,
-    canvas: null,
-    cropRect: null,
-    isCropMode: false,
-    isEraserMode: false,
-    eraserBrush: null,
-};
-
-// Open the image editor for a thumbnail
-function openImageEditor(thumbIndex) {
-    const filenames = Object.keys(state.images);
-    if (thumbIndex < 0 || thumbIndex >= filenames.length) return;
-    
-    const fname = filenames[thumbIndex];
-    editorState.currentThumbIndex = thumbIndex;
-    editorState.originalFname = fname;
-    editorState.originalB64 = state.images[fname];
-    editorState.open = true;
-    editorState.isCropMode = false;
-    editorState.isEraserMode = false;
-    
-    // Show modal
-    const modal = $('#imageEditor');
-    if (modal) modal.style.display = 'flex';
-    
-    // Update filename display
-    const fnameEl = $('#editorFname');
-    if (fnameEl) fnameEl.textContent = fname;
-    
-    // Reset tool buttons
-    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-    
-    // Load image onto Fabric.js canvas
-    const imgSrc = `data:image/jpeg;base64,${editorState.originalB64}`;
-    fabric.Image.fromURL(imgSrc, function(img) {
-        // Calculate scale to fit viewport
-        const maxW = window.innerWidth - 40;
-        const maxH = window.innerHeight - 100;
-        const scaleX = maxW / img.width;
-        const scaleY = maxH / img.height;
-        const scale = Math.min(scaleX, scaleY, 1);
-        
-        const canvasW = Math.round(img.width * scale);
-        const canvasH = Math.round(img.height * scale);
-        
-        // Clear any existing canvas
-        if (editorState.canvas) {
-            editorState.canvas.dispose();
-        }
-        
-        editorState.canvas = new fabric.Canvas('editorCanvas', {
-            width: canvasW,
-            height: canvasH,
-            backgroundColor: '#0f172a',
-            selection: false,
-            preserveObjectStacking: true
-        });
-        
-        img.scale(scale);
-        editorState.canvas.add(img);
-        editorState.canvas.sendToBack(img);
-        editorState.canvas.renderAll();
-        editorState.originalImage = img;
-        editorState.scale = scale;
-    }, { crossOrigin: 'anonymous' });
-}
-
-// Close the editor
-function closeImageEditor(save = false) {
-    if (save && editorState.canvas) {
-        applyEditorChanges();
-    }
-    const modal = $('#imageEditor');
-    if (modal) modal.style.display = 'none';
-    if (editorState.canvas) {
-        editorState.canvas.dispose();
-        editorState.canvas = null;
-    }
-    editorState.open = false;
-    editorState.isCropMode = false;
-    editorState.isEraserMode = false;
-}
-
-// Apply editor changes to state and thumbnails
-function applyEditorChanges() {
-    if (!editorState.canvas || !editorState.originalFname) return;
-    
-    const fname = editorState.originalFname;
-    const dataUrl = editorState.canvas.toDataURL({ format: 'jpeg', quality: 0.95 });
-    const cleanB64 = dataUrl.replace(/^data:image\/jpeg;base64,/, '');
-    
-    // Update state
-    state.images[fname] = cleanB64;
-    
-    // Update thumbnail
-    const filenames = Object.keys(state.images);
-    const idx = filenames.indexOf(fname);
-    if (idx >= 0) {
-        const thumbEl = $(`#thumb-${idx}`);
-        if (thumbEl) {
-            const imgEl = thumbEl.querySelector('img');
-            if (imgEl) imgEl.src = `data:image/jpeg;base64,${cleanB64}`;
-        }
-    }
-    
-    // Update markdown preview
-    updateMarkdownWithCaptions();
-}
-
-// Re-analyze the edited image with VLM
-async function reAnalyzeEditedImage(fname, editedDataUrl = null) {
-    // Use provided dataUrl or capture from canvas
-    const dataUrl = editedDataUrl || (editorState.canvas ? editorState.canvas.toDataURL({ format: 'jpeg', quality: 0.95 }) : null);
-    if (!dataUrl) {
-        showToast('Kein Bild zum Senden.', 'error');
-        return;
-    }
-    
-    const cleanB64 = dataUrl.replace(/^data:image\/jpeg;base64,/, '');
-    
-    showLoading(true);
-    try {
-        const userPrompt = ($('#imagePrompt')?.value?.trim() || 'Beschreibe dieses Bild aus einem Lehrbuch in einem kurzen, präzisen Satz auf Deutsch.');
-        const payload = {
-            model: CONFIG.model,
-            stream: false,
-            messages: [
-                {
-                    role: 'user',
-                    content: [
-                        { type: 'text', text: userPrompt },
-                        {
-                            type: 'image_url',
-                            image_url: {
-                                url: `data:image/jpeg;base64,${cleanB64}`
-                            }
-                        }
-                    ]
-                }
-            ],
-            max_tokens: 300
-        };
-        
-        let baseUrl = CONFIG.openwebuiUrl.replace(/\/+$/, '');
-        const chatUrl = baseUrl + '/chat/completions';
-        
-        const response = await fetch(chatUrl, {
-            method: 'POST',
-            headers: {
-                'Authorization': 'Bearer ' + CONFIG.apiToken,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-        
-        const data = await response.json();
-        
-        if (data.choices && data.choices[0]?.message?.content) {
-            const desc = data.choices[0].message.content.trim();
-            state.descriptions[fname] = desc;
-            updateMarkdownWithCaptions();
-            showToast('Bildbeschreibung aktualisiert!', 'success');
-        } else {
-            showToast('KI konnte keine Beschreibung erstellen.', 'error');
-        }
-    } catch (err) {
-        showToast('KI-Anfrage fehlgeschlagen: ' + err.message, 'error');
-    } finally {
-        showLoading(false);
-    }
-}
-
-// ===== Crop Tool =====
-function enableCropMode() {
-    if (!editorState.canvas) return;
-    
-    editorState.isCropMode = true;
-    editorState.isEraserMode = false;
-    editorState.canvas.discardActiveObject();
-    editorState.canvas.renderAll();
-    
-    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-    $('#toolCrop').classList.add('active');
-    
-    // Remove existing crop rect if any
-    if (editorState.cropRect) {
-        editorState.canvas.remove(editorState.cropRect);
-    }
-    
-    const scale = editorState.scale || 1;
-    const cropRect = new fabric.Rect({
-        left: 50,
-        top: 50,
-        width: 200,
-        height: 200,
-        fill: 'rgba(79, 70, 229, 0.15)',
-        stroke: '#6366f1',
-        strokeWidth: 2,
-        strokeDashArray: [8, 4],
-        selectable: true,
-        hasControls: true,
-        hasBorders: true,
-        name: 'cropRect'
-    });
-    
-    editorState.cropRect = cropRect;
-    editorState.canvas.add(cropRect);
-    editorState.canvas.setActiveObject(cropRect);
-    editorState.canvas.renderAll();
-    
-    showToast('Zuschneiden: Rahmen aufziehen und anpassen, dann wieder auf Zuschneiden klicken.', 'info');
-}
-
-function executeCrop() {
-    if (!editorState.canvas || !editorState.originalImage || !editorState.cropRect) {
-        showToast('Kein Schnittbereich definiert.', 'error');
-        return;
-    }
-    
-    const rect = editorState.cropRect;
-    const img = editorState.originalImage;
-    const scale = img.scaleX;
-    
-    // Convert canvas coordinates to image coordinates
-    const cropLeft = Math.max(0, (rect.left) / scale);
-    const cropTop = Math.max(0, (rect.top) / scale);
-    const cropW = Math.min(rect.width / scale, img.width - cropLeft);
-    const cropH = Math.min(rect.height / scale, img.height - cropTop);
-    
-    if (cropW < 10 || cropH < 10) {
-        showToast('Schnittbereich ist zu klein.', 'error');
-        return;
-    }
-    
-    const origEl = img._element || img.getElement?.();
-    const origW = origEl ? (origEl.naturalWidth || origEl.width) : img.width;
-    const origH = origEl ? (origEl.naturalHeight || origEl.height) : img.height;
-    
-    // Use the full resolution image to crop
-    const fullResDataUrl = img.toDataURL({
-        format: 'jpeg',
-        quality: 1.0,
-        multiplier: 1 / (editorState.scale || 1),
-        left: cropLeft,
-        top: cropTop,
-        width: cropW,
-        height: cropH
-    });
-    
-    const cleanB64 = fullResDataUrl.replace(/^data:image\/jpeg;base64,/, '');
-    
-    // Remove crop rect and reload cropped image
-    editorState.canvas.remove(rect);
-    editorState.cropRect = null;
-    editorState.isCropMode = false;
-    
-    fabric.Image.fromURL(fullResDataUrl, function(croppedImg) {
-        editorState.originalImage = croppedImg;
-        editorState.canvas.clear();
-        editorState.canvas.setBackgroundColor('#0f172a', editorState.canvas.renderAll.bind(editorState.canvas));
-        editorState.canvas.add(croppedImg);
-        editorState.canvas.renderAll();
-        
-        // Update state
-        state.images[editorState.originalFname] = cleanB64;
-        showToast('Bild zugeschnitten!', 'success');
-    });
-}
-
-// ===== Eraser Tool =====
-function enableEraserMode() {
-    if (!editorState.canvas) return;
-    
-    editorState.isEraserMode = true;
-    editorState.isCropMode = false;
-    editorState.canvas.discardActiveObject();
-    editorState.canvas.selection = false;
-    editorState.canvas.forEachObject(obj => {
-        if (obj.name !== 'cropRect') obj.selectable = false;
-    });
-    
-    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-    $('#toolEraser').classList.add('active');
-    
-    const brush = new fabric.PencilBrush(editorState.canvas);
-    brush.width = 25;
-    brush.color = 'rgba(0,0,0,1)';
-    brush.globalCompositeOperation = 'destination-out';
-    editorState.canvas.isDrawingMode = true;
-    editorState.canvas.freeDrawingBrush = brush;
-    
-    showToast('Radierer: Über das Bild malen, um Elemente zu entfernen. Wieder auf Radierer klicken zum Beenden.', 'info');
-}
-
-function applyEraserToOriginal() {
-    if (!editorState.originalImage || !editorState.originalImage._element) return;
-    
-    const origEl = editorState.originalImage._element;
-    const offscreen = document.createElement('canvas');
-    offscreen.width = origEl.naturalWidth || origEl.width;
-    offscreen.height = origEl.naturalHeight || origEl.height;
-    const offCtx = offscreen.getContext('2d');
-    offCtx.drawImage(origEl, 0, 0);
-    
-    // Apply eraser paths to the original
-    const paths = editorState.canvas.getObjects('path').filter(p => p.type === 'path');
-    const scale = editorState.scale || 1;
-    const imgScale = editorState.originalImage.scaleX || 1;
-    
-    paths.forEach(path => {
-        offCtx.save();
-        offCtx.globalCompositeOperation = 'destination-out';
-        offCtx.lineWidth = (path.strokeWidth || 25) / imgScale;
-        offCtx.lineCap = 'round';
-        offCtx.lineJoin = 'round';
-        offCtx.strokeStyle = 'rgba(0,0,0,1)';
-        
-        const pts = path.path;
-        if (pts && pts.length > 0) {
-            offCtx.beginPath();
-            for (let i = 0; i < pts.length; i++) {
-                const p = pts[i];
-                const x = (p[1] + path.left) / (scale * imgScale);
-                const y = (p[2] + path.top) / (scale * imgScale);
-                if (i === 0) offCtx.moveTo(x, y);
-                else offCtx.lineTo(x, y);
-            }
-            offCtx.stroke();
-        }
-        offCtx.restore();
-    });
-    
-    const dataUrl = offscreen.toDataURL({ format: 'jpeg', quality: 0.95 });
-    const cleanB64 = dataUrl.replace(/^data:image\/jpeg;base64,/, '');
-    
-    fabric.Image.fromURL(dataUrl, function(newImg) {
-        editorState.originalImage = newImg;
-        editorState.canvas.clear();
-        editorState.canvas.setBackgroundColor('#0f172a', editorState.canvas.renderAll.bind(editorState.canvas));
-        editorState.canvas.add(newImg);
-        editorState.canvas.renderAll();
-        state.images[editorState.originalFname] = cleanB64;
-    });
-    
-    // Clear paths from canvas
-    const pathsToRemove = editorState.canvas.getObjects('path');
-    pathsToRemove.forEach(p => editorState.canvas.remove(p));
-}
-
-// ===== Swap Tool =====
-function triggerSwap() {
-    const input = $('#swapFileInput');
-    if (input) input.click();
-}
-
-function handleSwap(file) {
-    if (!file || !file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const dataUrl = e.target.result;
-        fabric.Image.fromURL(dataUrl, function(newImg) {
-            const scale = Math.min(
-                (window.innerWidth - 40) / newImg.width,
-                (window.innerHeight - 100) / newImg.height,
-                1
-            );
-            newImg.scale(scale);
-            
-            editorState.originalImage = newImg;
-            editorState.canvas.clear();
-            editorState.canvas.setBackgroundColor('#0f172a', editorState.canvas.renderAll.bind(editorState.canvas));
-            editorState.canvas.add(newImg);
-            editorState.canvas.renderAll();
-            
-            const cleanB64 = dataUrl.replace(/^data:image\/jpeg;base64,/, '');
-            state.images[editorState.originalFname] = cleanB64;
-            showToast('Bild ausgetauscht!', 'success');
-        });
-    };
-    reader.readAsDataURL(file);
-}
-
-// ===== Event Handlers =====
-on('#toolCrop', 'click', () => {
-    if (editorState.isCropMode) {
-        executeCrop();
-    } else {
-        enableCropMode();
-    }
-});
-
-on('#toolEraser', 'click', () => {
-    if (editorState.isEraserMode) {
-        editorState.isEraserMode = false;
-        editorState.canvas.isDrawingMode = false;
-        applyEraserToOriginal();
-        editorState.canvas.forEachObject(obj => {
-            if (obj.name !== 'cropRect') obj.selectable = true;
-        });
-        document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-    } else {
-        enableEraserMode();
-    }
-});
-
-on('#toolSwap', 'click', triggerSwap);
-
-on('#swapFileInput', 'change', (e) => {
-    if (e.target.files.length > 0) {
-        handleSwap(e.target.files[0]);
-        e.target.value = '';
-    }
-});
-
-on('#toolReset', 'click', () => {
-    if (editorState.originalB64) {
-        fabric.Image.fromURL(`data:image/jpeg;base64,${editorState.originalB64}`, function(img) {
-            editorState.originalImage = img;
-            editorState.canvas.clear();
-            editorState.canvas.setBackgroundColor('#0f172a', editorState.canvas.renderAll.bind(editorState.canvas));
-            editorState.canvas.add(img);
-            editorState.canvas.renderAll();
-            state.images[editorState.originalFname] = editorState.originalB64;
-            showToast('Bild zurückgesetzt.', 'info');
-        });
-    }
-});
-
-on('#toolCancel', 'click', () => closeImageEditor(false));
-
-on('#toolFinish', 'click', async () => {
-    // Save changes first
-    applyEditorChanges();
-    
-    // Freeze the image data BEFORE closing the editor
-    const fname = editorState.originalFname;
-    const editedDataUrl = editorState.canvas.toDataURL({ format: 'jpeg', quality: 0.95 });
-    
-    // Close editor
-    closeImageEditor(false);
-    
-    // Re-analyze with AI using the captured data
-    await reAnalyzeEditedImage(fname, editedDataUrl);
-});
-
-// Keyboard shortcut: Escape to close
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && editorState.open) {
-        closeImageEditor(false);
-    }
-});
-
 // ===== Comparison View Functions =====
 
 function buildComparePageMap() {
@@ -2535,22 +2035,8 @@ function openCompareZoom(src, pageNum) {
 }
 
 // Comparison View Event Listeners
-on('#btnToggleCompare', 'click', async () => {
-    if (compareViewOpen) {
-        closeCompareView();
-        const btn = $('#btnToggleCompare');
-        if (btn) btn.textContent = '🔍 Seitenweiser Vergleich';
-    } else {
-        await openCompareView();
-        const btn = $('#btnToggleCompare');
-        if (btn) btn.textContent = '❌ Vergleich schließen';
-    }
-});
-
 on('#compareClose', 'click', () => {
     closeCompareView();
-    const btn = $('#btnToggleCompare');
-    if (btn) btn.textContent = '🔍 Seitenweiser Vergleich';
 });
 
 on('#comparePrev', 'click', async () => {
@@ -2583,20 +2069,6 @@ on('#compareZoomOut', 'click', () => {
     updateCompareZoom();
 });
 
-on('#compareHqToggle', 'click', async () => {
-    compareHqMode = !compareHqMode;
-    const btn = $('#compareHqToggle');
-    if (btn) {
-        btn.textContent = compareHqMode ? 'HQ ✓' : 'HQ';
-        btn.style.background = compareHqMode ? 'var(--primary)' : '';
-        btn.style.color = compareHqMode ? 'white' : '';
-    }
-    // Clear cached images to force re-render with new quality
-    pdfPageImages = {};
-    await renderComparePage();
-    showToast(compareHqMode ? 'Hohe Qualität aktiviert' : 'Normale Qualität', 'info');
-});
-
 // Keyboard navigation for comparison view
 document.addEventListener('keydown', (e) => {
     if (!compareViewOpen) return;
@@ -2625,6 +2097,5 @@ document.addEventListener('keydown', (e) => {
 // Expose for testing
 window.pipelineState = state;
 window.runPipeline = runPipeline;
-window.openImageEditor = openImageEditor;
 
 console.log('PDF Pipeline Frontend loaded! 🚀');
