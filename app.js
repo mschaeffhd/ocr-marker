@@ -1525,8 +1525,12 @@ async function loadModels(baseUrl) {
             modelSelect.appendChild(option);
         });
         
-        // Select first model
-        if (models.length > 0) {
+        // Restore saved model if available and in list, otherwise select first
+        const savedModel = localStorage.getItem('pdfPipeline_model');
+        if (savedModel && models.includes(savedModel)) {
+            modelSelect.value = savedModel;
+            debugLog(`Gespeichertes Model wiederhergestellt: ${savedModel}`, 'success');
+        } else if (models.length > 0) {
             modelSelect.value = models[0];
         }
         
@@ -1632,11 +1636,10 @@ if (apiField && !apiField.value) {
     }, 600);
 }
 
-// ===== Image Editor (Canvas-based) =====
-let editorState = {
+// ===== Image Editor (Clean Rewrite) =====
+const editorState = {
     open: false,
     fname: null,
-    originalB64: null,
     canvas: null,
     ctx: null,
     undoStack: [],
@@ -1644,97 +1647,71 @@ let editorState = {
     isDrawing: false,
     lastX: 0,
     lastY: 0,
-    cropRect: null,  // {x, y, w, h} in canvas coords
-    cropMode: null,  // 'create', 'move', 'resize-nw', etc.
-    cropStart: null, // {x, y, rect}
-    scale: 1
+    cropRect: null,
+    cropMode: null,
+    cropStart: null,
+    bgImage: null  // Offscreen canvas holding clean image (no overlays)
 };
 
 function openEditor(fname) {
     if (!fname || !state.images[fname]) return;
     
-    // CRITICAL: open flag must be set BEFORE img.src assignment
-    // because base64 images load synchronously!
-    editorState.open = true;
-    editorState.fname = fname;
-    editorState.originalB64 = state.images[fname];
-    editorState.tool = 'brush';
-    editorState.undoStack = [];
-    editorState.cropRect = null;
-    editorState.cropMode = null;
-    editorState.isDrawing = false;
-    
-    $('#imageEditor').style.display = 'flex';
-    $('#editorFname').textContent = fname;
-    $('#cropActionBar').style.display = 'none';
-    
-    document.querySelectorAll('#imageEditor .tool-btn').forEach(b => b.classList.remove('active'));
-    $('#toolBrush')?.classList.add('active');
-    
-    // Robust image loading: handle both raw base64 and data URLs
-    let imgSrc = editorState.originalB64;
-    if (!imgSrc.startsWith('data:')) {
-        imgSrc = 'data:image/jpeg;base64,' + imgSrc;
-    }
+    const rawB64 = state.images[fname];
+    let imgSrc = rawB64;
+    if (!imgSrc.startsWith('data:')) imgSrc = 'data:image/jpeg;base64,' + imgSrc;
     
     const img = new Image();
     img.onload = function() {
-        if (!editorState.open) return; // user closed before load
-        editorState.canvas = $('#editorCanvas');
-        if (!editorState.canvas) return;
-        
+        // Setup canvas
+        const cvs = $('#editorCanvas');
         const maxW = window.innerWidth - 40;
         const maxH = window.innerHeight - 140;
         const scale = Math.min(maxW / img.width, maxH / img.height, 1);
-        editorState.scale = scale;
-        editorState.canvas.width = Math.round(img.width * scale);
-        editorState.canvas.height = Math.round(img.height * scale);
         
-        editorState.ctx = editorState.canvas.getContext('2d');
-        editorState.ctx.drawImage(img, 0, 0, editorState.canvas.width, editorState.canvas.height);
+        cvs.width = Math.round(img.width * scale);
+        cvs.height = Math.round(img.height * scale);
         
-        pushUndo();
-        setupEditorEvents();
+        const ctx = cvs.getContext('2d');
+        ctx.drawImage(img, 0, 0, cvs.width, cvs.height);
+        
+        // Create offscreen background canvas
+        const bg = document.createElement('canvas');
+        bg.width = cvs.width;
+        bg.height = cvs.height;
+        bg.getContext('2d').drawImage(img, 0, 0, cvs.width, cvs.height);
+        
+        // Set state
+        editorState.open = true;
+        editorState.fname = fname;
+        editorState.canvas = cvs;
+        editorState.ctx = ctx;
+        editorState.bgImage = bg;
+        editorState.tool = 'brush';
+        editorState.undoStack = [bg.toDataURL('image/jpeg', 0.95)];
+        editorState.cropRect = null;
+        editorState.cropMode = null;
+        editorState.isDrawing = false;
+        
+        // UI
+        $('#imageEditor').style.display = 'flex';
+        $('#editorFname').textContent = fname;
+        $('#cropActionBar').style.display = 'none';
+        document.querySelectorAll('#imageEditor .tool-btn').forEach(b => b.classList.remove('active'));
+        $('#toolBrush')?.classList.add('active');
     };
     img.onerror = function() {
         showToast('Bild konnte nicht geladen werden', 'error');
-        closeEditor();
     };
     img.src = imgSrc;
 }
 
 function closeEditor() {
     $('#imageEditor').style.display = 'none';
-    removeEditorEvents();
     editorState.open = false;
     editorState.cropRect = null;
     editorState.cropMode = null;
     editorState.isDrawing = false;
     $('#cropActionBar').style.display = 'none';
-}
-
-function setupEditorEvents() {
-    const c = editorState.canvas;
-    if (!c) return;
-    c.addEventListener('mousedown', onEditDown);
-    c.addEventListener('mousemove', onEditMove);
-    c.addEventListener('mouseup', onEditUp);
-    c.addEventListener('mouseleave', onEditUp);
-    c.addEventListener('touchstart', onEditTouchStart, { passive: false });
-    c.addEventListener('touchmove', onEditTouchMove, { passive: false });
-    c.addEventListener('touchend', onEditUp);
-}
-
-function removeEditorEvents() {
-    const c = editorState.canvas;
-    if (!c) return;
-    c.removeEventListener('mousedown', onEditDown);
-    c.removeEventListener('mousemove', onEditMove);
-    c.removeEventListener('mouseup', onEditUp);
-    c.removeEventListener('mouseleave', onEditUp);
-    c.removeEventListener('touchstart', onEditTouchStart);
-    c.removeEventListener('touchmove', onEditTouchMove);
-    c.removeEventListener('touchend', onEditUp);
 }
 
 function getCanvasPos(e) {
@@ -1764,42 +1741,38 @@ function getCropHandle(x, y) {
     return null;
 }
 
+function redrawCanvas() {
+    const cvs = editorState.canvas;
+    const ctx = editorState.ctx;
+    const bg = editorState.bgImage;
+    if (!cvs || !ctx || !bg) return;
+    ctx.clearRect(0, 0, cvs.width, cvs.height);
+    ctx.drawImage(bg, 0, 0);
+    if (editorState.cropRect) drawCropOverlay();
+}
+
 function drawCropOverlay() {
     const ctx = editorState.ctx;
     const r = editorState.cropRect;
+    const cvs = editorState.canvas;
     if (!r || !ctx) return;
-    // Semi-transparent dark overlay outside crop
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.fillRect(0, 0, editorState.canvas.width, r.y);
-    ctx.fillRect(0, r.y + r.h, editorState.canvas.width, editorState.canvas.height - r.y - r.h);
+    ctx.fillRect(0, 0, cvs.width, r.y);
+    ctx.fillRect(0, r.y + r.h, cvs.width, cvs.height - r.y - r.h);
     ctx.fillRect(0, r.y, r.x, r.h);
-    ctx.fillRect(r.x + r.w, r.y, editorState.canvas.width - r.x - r.w, r.h);
-    // Crop border
+    ctx.fillRect(r.x + r.w, r.y, cvs.width - r.x - r.w, r.h);
     ctx.strokeStyle = '#4f46e5';
     ctx.lineWidth = 2;
     ctx.setLineDash([6, 4]);
     ctx.strokeRect(r.x, r.y, r.w, r.h);
     ctx.setLineDash([]);
-    // Handles
     ctx.fillStyle = '#4f46e5';
     const s = 8;
     [[r.x, r.y], [r.x+r.w, r.y], [r.x, r.y+r.h], [r.x+r.w, r.y+r.h]].forEach(([hx, hy]) => {
         ctx.fillRect(hx-s, hy-s, s*2, s*2);
     });
     ctx.restore();
-}
-
-function redrawCanvas() {
-    const cvs = editorState.canvas;
-    if (!cvs || editorState.undoStack.length === 0) return;
-    const img = new Image();
-    img.onload = () => {
-        editorState.ctx.clearRect(0, 0, cvs.width, cvs.height);
-        editorState.ctx.drawImage(img, 0, 0);
-        if (editorState.cropRect) drawCropOverlay();
-    };
-    img.src = editorState.undoStack[editorState.undoStack.length - 1];
 }
 
 function onEditDown(e) {
@@ -1824,7 +1797,7 @@ function onEditDown(e) {
         }
         $('#cropActionBar').style.display = 'none';
     } else if (editorState.tool === 'eyedropper') {
-        const px = editorState.ctx.getImageData(p.x, p.y, 1, 1).data;
+        const px = editorState.ctx.getImageData(Math.floor(p.x), Math.floor(p.y), 1, 1).data;
         const hex = '#' + [px[0], px[1], px[2]].map(v => v.toString(16).padStart(2, '0')).join('');
         $('#brushColor').value = hex;
         setEditorTool('brush');
@@ -1894,7 +1867,13 @@ function onEditMove(e) {
 function onEditUp(e) {
     if (!editorState.open || !editorState.isDrawing) return;
     editorState.isDrawing = false;
-    if (editorState.tool === 'brush') pushUndo();
+    if (editorState.tool === 'brush') {
+        // Sync bgImage with current canvas state (brush strokes are permanent)
+        editorState.bgImage.width = editorState.canvas.width;
+        editorState.bgImage.height = editorState.canvas.height;
+        editorState.bgImage.getContext('2d').drawImage(editorState.canvas, 0, 0);
+        pushUndo();
+    }
     if (editorState.tool === 'crop' && editorState.cropRect && editorState.cropRect.w > 20 && editorState.cropRect.h > 20) {
         $('#cropActionBar').style.display = 'flex';
     }
@@ -1918,19 +1897,6 @@ function onEditTouchMove(e) {
     }
 }
 
-function drawBrush(x1, y1, x2, y2) {
-    const ctx = editorState.ctx;
-    if (!ctx) return;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = parseInt($('#brushSize')?.value || 10);
-    ctx.strokeStyle = $('#brushColor')?.value || '#ff0000';
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-}
-
 function pushUndo() {
     if (!editorState.canvas) return;
     if (editorState.undoStack.length > 20) editorState.undoStack.shift();
@@ -1943,12 +1909,17 @@ function undoEditor() {
         return;
     }
     editorState.undoStack.pop();
+    const dataUrl = editorState.undoStack[editorState.undoStack.length - 1];
     const img = new Image();
     img.onload = () => {
         editorState.ctx.clearRect(0, 0, editorState.canvas.width, editorState.canvas.height);
         editorState.ctx.drawImage(img, 0, 0);
+        // Sync bgImage
+        editorState.bgImage.width = editorState.canvas.width;
+        editorState.bgImage.height = editorState.canvas.height;
+        editorState.bgImage.getContext('2d').drawImage(img, 0, 0);
     };
-    img.src = editorState.undoStack[editorState.undoStack.length - 1];
+    img.src = dataUrl;
 }
 
 function setEditorTool(tool) {
@@ -1980,6 +1951,11 @@ function applyCrop() {
     editorState.canvas.height = r.h;
     editorState.ctx.clearRect(0, 0, r.w, r.h);
     editorState.ctx.drawImage(nc, 0, 0);
+    // Sync bgImage to new cropped size
+    editorState.bgImage = document.createElement('canvas');
+    editorState.bgImage.width = r.w;
+    editorState.bgImage.height = r.h;
+    editorState.bgImage.getContext('2d').drawImage(nc, 0, 0);
     editorState.cropRect = null;
     $('#cropActionBar').style.display = 'none';
     pushUndo();
@@ -1988,14 +1964,8 @@ function applyCrop() {
 
 function saveEditor() {
     if (!editorState.canvas || !editorState.fname) return;
-    
-    // Remove crop overlay before saving so it doesn't become part of the image
-    if (editorState.cropRect) {
-        editorState.cropRect = null;
-        redrawCanvas();
-    }
-    
-    const b64 = editorState.canvas.toDataURL('image/jpeg', 0.95).replace(/^data:image\/jpeg;base64,/, '');
+    // Crop overlay is NOT in bgImage, so we can safely export bgImage
+    const b64 = editorState.bgImage.toDataURL('image/jpeg', 0.95).replace(/^data:image\/jpeg;base64,/, '');
     state.images[editorState.fname] = b64;
     comparePageMap = buildComparePageMap();
     if (compareViewOpen) renderComparePage();
@@ -2033,10 +2003,51 @@ on('#cropApply', 'click', applyCrop);
 on('#cropCancel', 'click', () => { editorState.cropRect = null; $('#cropActionBar').style.display = 'none'; redrawCanvas(); });
 on('#brushSize', 'input', (e) => { const v = $('#brushSizeVal'); if (v) v.textContent = e.target.value; });
 
+// Editor canvas events (registered once, state-gated)
+(function setupEditorOnce() {
+    const cvs = $('#editorCanvas');
+    if (!cvs) return;
+    cvs.addEventListener('mousedown', onEditDown);
+    cvs.addEventListener('mousemove', onEditMove);
+    cvs.addEventListener('mouseup', onEditUp);
+    cvs.addEventListener('mouseleave', onEditUp);
+    cvs.addEventListener('touchstart', onEditTouchStart, { passive: false });
+    cvs.addEventListener('touchmove', onEditTouchMove, { passive: false });
+    cvs.addEventListener('touchend', onEditUp);
+})();
+
 document.addEventListener('keydown', (e) => {
     if (!editorState.open) return;
     if (e.key === 'Escape') closeEditor();
     else if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undoEditor(); }
+});
+
+// ===== Auto-save settings =====
+// Save model selection immediately when changed
+on('#modelSelect', 'change', () => {
+    const val = $('#modelSelect')?.value;
+    if (val) localStorage.setItem('pdfPipeline_model', val);
+});
+
+// Save other settings on input/change
+const autoSaveFields = [
+    '#markerServerUrl', '#openwebuiUrl', '#apiToken',
+    '#pageRange', '#outputFormat', '#docxFontSize', '#docxLineSpacing'
+];
+autoSaveFields.forEach(sel => {
+    on(sel, 'change', () => {
+        if (typeof saveConfig === 'function') saveConfig();
+    });
+});
+
+const autoSaveChecks = [
+    '#forceOcr', '#paginateOutput', '#useLlm', '#stripExistingOcr',
+    '#redoInlineMath', '#disableImageExtraction'
+];
+autoSaveChecks.forEach(sel => {
+    on(sel, 'change', () => {
+        if (typeof saveConfig === 'function') saveConfig();
+    });
 });
 
 // ===== Comparison View Functions =====
