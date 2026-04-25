@@ -414,7 +414,7 @@
             <div class="editor-toolbar-scroll">
                 <button class="tool-btn" id="toolCrop" title="Zuschneiden">✂️</button>
                 <button class="tool-btn" id="toolBrush" title="Pinsel">🖌️</button>
-                <button class="tool-btn" id="toolEyedropper" title="Pipette">💧</button>
+                <button class="tool-btn" id="toolEyedropper" title="Pipette">🧪</button>
                 <input type="color" id="brushColor" value="#ff0000" title="Farbe wählen">
                 <input type="range" id="brushSize" min="1" max="50" value="10" title="Pinselgröße">
                 <span id="brushSizeVal" class="editor-size-val">10</span>
@@ -429,11 +429,16 @@
         <div class="editor-canvas-container" id="editorCanvasContainer">
             <canvas id="editorCanvas"></canvas>
             <div id="cropOverlay" class="crop-overlay" style="display:none;">
-                <div class="crop-rect" id="cropRect"></div>
-                <div class="crop-buttons">
-                    <button id="cropApply">✓ Anwenden</button>
-                    <button id="cropCancel">✕ Abbrechen</button>
+                <div class="crop-rect" id="cropRect">
+                    <div class="crop-handle crop-handle-nw" data-handle="nw"></div>
+                    <div class="crop-handle crop-handle-ne" data-handle="ne"></div>
+                    <div class="crop-handle crop-handle-sw" data-handle="sw"></div>
+                    <div class="crop-handle crop-handle-se" data-handle="se"></div>
                 </div>
+            </div>
+            <div id="cropActionBar" class="crop-action-bar" style="display:none;">
+                <button class="crop-btn crop-btn-apply" id="cropApply">✓ Zuschneiden</button>
+                <button class="crop-btn crop-btn-cancel" id="cropCancel">✕ Abbrechen</button>
             </div>
         </div>
     </div>

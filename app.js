@@ -1645,8 +1645,9 @@ let editorState = {
     lastX: 0,
     lastY: 0,
     cropActive: false,
-    cropStart: null,
-    cropEnd: null,
+    cropRect: null, // {x, y, w, h} in canvas coords
+    cropDrag: null, // 'move', 'resize-nw', etc.
+    cropDragStart: null, // {x, y, rect}
     scale: 1
 };
 
@@ -1658,6 +1659,8 @@ function openEditor(fname) {
     editorState.tool = 'brush';
     editorState.undoStack = [];
     editorState.cropActive = false;
+    editorState.cropRect = null;
+    editorState.cropDrag = null;
     editorState.isDrawing = false;
     
     const modal = $('#imageEditor');
@@ -1730,6 +1733,30 @@ function setupEditorEvents() {
     canvas.addEventListener('touchstart', onEditorTouchStart, { passive: false });
     canvas.addEventListener('touchmove', onEditorTouchMove, { passive: false });
     canvas.addEventListener('touchend', onEditorMouseUp);
+    
+    // Crop overlay events
+    const cropRect = $('#cropRect');
+    if (cropRect) {
+        cropRect.addEventListener('mousedown', onCropRectMouseDown);
+        cropRect.addEventListener('touchstart', (e) => {
+            e.stopPropagation();
+            if (e.touches.length === 1) {
+                const touch = e.touches[0];
+                onCropRectMouseDown({ stopPropagation: () => {}, clientX: touch.clientX, clientY: touch.clientY });
+            }
+        }, { passive: false });
+    }
+    
+    document.querySelectorAll('.crop-handle').forEach(handle => {
+        handle.addEventListener('mousedown', onCropHandleMouseDown);
+        handle.addEventListener('touchstart', (e) => {
+            e.stopPropagation();
+            if (e.touches.length === 1) {
+                const touch = e.touches[0];
+                onCropHandleMouseDown({ stopPropagation: () => {}, target: e.target, clientX: touch.clientX, clientY: touch.clientY });
+            }
+        }, { passive: false });
+    });
 }
 
 function removeEditorEvents() {
@@ -1743,6 +1770,15 @@ function removeEditorEvents() {
     canvas.removeEventListener('touchstart', onEditorTouchStart);
     canvas.removeEventListener('touchmove', onEditorTouchMove);
     canvas.removeEventListener('touchend', onEditorMouseUp);
+    
+    const cropRect = $('#cropRect');
+    if (cropRect) {
+        cropRect.removeEventListener('mousedown', onCropRectMouseDown);
+    }
+    
+    document.querySelectorAll('.crop-handle').forEach(handle => {
+        handle.removeEventListener('mousedown', onCropHandleMouseDown);
+    });
 }
 
 function getCanvasCoords(e) {
@@ -1757,21 +1793,25 @@ function getCanvasCoords(e) {
 
 function onEditorMouseDown(e) {
     if (!editorState.open) return;
-    e.preventDefault();
     
+    // Ignore if clicking on crop handles or crop rect (they have their own handlers)
+    if (e.target.closest('.crop-handle') || e.target.closest('.crop-rect')) return;
+    
+    e.preventDefault();
     const coords = getCanvasCoords(e);
     editorState.isDrawing = true;
     editorState.lastX = coords.x;
     editorState.lastY = coords.y;
     
     if (editorState.tool === 'crop') {
-        editorState.cropStart = coords;
-        editorState.cropEnd = coords;
-        showCropRect(coords, coords);
+        // Start new crop selection
+        editorState.cropRect = { x: coords.x, y: coords.y, w: 0, h: 0 };
+        editorState.cropDrag = 'create';
+        showCropOverlay();
+        updateCropDOM();
     } else if (editorState.tool === 'eyedropper') {
         pickColor(coords.x, coords.y);
     } else if (editorState.tool === 'brush') {
-        // Draw single dot
         drawBrush(coords.x, coords.y, coords.x, coords.y);
     }
 }
@@ -1782,9 +1822,47 @@ function onEditorMouseMove(e) {
     
     const coords = getCanvasCoords(e);
     
-    if (editorState.tool === 'crop') {
-        editorState.cropEnd = coords;
-        updateCropRect(editorState.cropStart, coords);
+    if (editorState.tool === 'crop' && editorState.cropDrag) {
+        const cvs = editorState.canvas;
+        if (editorState.cropDrag === 'create') {
+            const x1 = Math.min(editorState.lastX, coords.x);
+            const y1 = Math.min(editorState.lastY, coords.y);
+            const x2 = Math.max(editorState.lastX, coords.x);
+            const y2 = Math.max(editorState.lastY, coords.y);
+            editorState.cropRect = {
+                x: x1, y: y1,
+                w: Math.min(x2 - x1, cvs.width - x1),
+                h: Math.min(y2 - y1, cvs.height - y1)
+            };
+        } else if (editorState.cropDrag === 'move' && editorState.cropDragStart) {
+            const dx = coords.x - editorState.cropDragStart.x;
+            const dy = coords.y - editorState.cropDragStart.y;
+            const r = editorState.cropDragStart.rect;
+            editorState.cropRect = {
+                x: Math.max(0, Math.min(r.x + dx, cvs.width - r.w)),
+                y: Math.max(0, Math.min(r.y + dy, cvs.height - r.h)),
+                w: r.w, h: r.h
+            };
+        } else if (editorState.cropDrag && editorState.cropDrag.startsWith('resize-') && editorState.cropDragStart) {
+            const r = editorState.cropDragStart.rect;
+            const dir = editorState.cropDrag.replace('resize-', '');
+            let x = r.x, y = r.y, w = r.w, h = r.h;
+            
+            if (dir.includes('e')) w = Math.max(20, coords.x - r.x);
+            if (dir.includes('w')) {
+                const newX = Math.min(coords.x, r.x + r.w - 20);
+                w = r.x + r.w - newX;
+                x = newX;
+            }
+            if (dir.includes('s')) h = Math.max(20, coords.y - r.y);
+            if (dir.includes('n')) {
+                const newY = Math.min(coords.y, r.y + r.h - 20);
+                h = r.y + r.h - newY;
+                y = newY;
+            }
+            editorState.cropRect = { x, y, w, h };
+        }
+        updateCropDOM();
     } else if (editorState.tool === 'brush') {
         drawBrush(editorState.lastX, editorState.lastY, coords.x, coords.y);
         editorState.lastX = coords.x;
@@ -1796,6 +1874,8 @@ function onEditorMouseUp(e) {
     if (!editorState.open || !editorState.isDrawing) return;
     
     editorState.isDrawing = false;
+    editorState.cropDrag = null;
+    editorState.cropDragStart = null;
     
     if (editorState.tool === 'brush') {
         pushUndo();
@@ -1891,32 +1971,37 @@ function setEditorTool(tool) {
     
     // Update cursor
     if (editorState.canvas) {
-        if (tool === 'eyedropper') editorState.canvas.style.cursor = 'crosshair';
-        else if (tool === 'crop') editorState.canvas.style.cursor = 'crosshair';
-        else editorState.canvas.style.cursor = 'crosshair';
+        editorState.canvas.style.cursor = (tool === 'crop') ? 'crosshair' : 'crosshair';
     }
     
-    // Hide crop overlay if not crop
-    if (tool !== 'crop') {
-        const cropOverlay = $('#cropOverlay');
-        if (cropOverlay) cropOverlay.style.display = 'none';
+    // Show/hide crop overlay
+    if (tool === 'crop') {
+        showCropOverlay();
+    } else {
+        hideCropOverlay();
     }
 }
 
 // Crop overlay helpers
-function showCropRect(start, end) {
+function showCropOverlay() {
     const overlay = $('#cropOverlay');
-    const rect = $('#cropRect');
-    if (!overlay || !rect) return;
-    
-    overlay.style.display = 'block';
-    rect.style.display = 'block';
-    updateCropRect(start, end);
+    if (overlay) overlay.style.display = 'block';
+    if (editorState.cropRect) {
+        updateCropDOM();
+    }
 }
 
-function updateCropRect(start, end) {
+function hideCropOverlay() {
+    const overlay = $('#cropOverlay');
+    const actionBar = $('#cropActionBar');
+    if (overlay) overlay.style.display = 'none';
+    if (actionBar) actionBar.style.display = 'none';
+}
+
+function updateCropDOM() {
     const rect = $('#cropRect');
-    if (!rect) return;
+    const actionBar = $('#cropActionBar');
+    if (!rect || !editorState.canvas || !editorState.cropRect) return;
     
     const canvasRect = editorState.canvas.getBoundingClientRect();
     const containerRect = editorState.canvas.parentElement.getBoundingClientRect();
@@ -1924,58 +2009,74 @@ function updateCropRect(start, end) {
     const scaleX = canvasRect.width / editorState.canvas.width;
     const scaleY = canvasRect.height / editorState.canvas.height;
     
-    const x1 = Math.min(start.x, end.x) * scaleX;
-    const y1 = Math.min(start.y, end.y) * scaleY;
-    const x2 = Math.max(start.x, end.x) * scaleX;
-    const y2 = Math.max(start.y, end.y) * scaleY;
+    const r = editorState.cropRect;
+    const left = r.x * scaleX + (canvasRect.left - containerRect.left);
+    const top = r.y * scaleY + (canvasRect.top - containerRect.top);
+    const width = r.w * scaleX;
+    const height = r.h * scaleY;
     
-    rect.style.left = x1 + 'px';
-    rect.style.top = y1 + 'px';
-    rect.style.width = (x2 - x1) + 'px';
-    rect.style.height = (y2 - y1) + 'px';
+    rect.style.left = left + 'px';
+    rect.style.top = top + 'px';
+    rect.style.width = width + 'px';
+    rect.style.height = height + 'px';
     rect.style.display = 'block';
+    
+    if (actionBar && r.w > 20 && r.h > 20) {
+        actionBar.style.display = 'flex';
+    }
+}
+
+// Crop rect drag (move)
+function onCropRectMouseDown(e) {
+    e.stopPropagation();
+    if (!editorState.open) return;
+    const coords = getCanvasCoords(e);
+    editorState.isDrawing = true;
+    editorState.cropDrag = 'move';
+    editorState.cropDragStart = { x: coords.x, y: coords.y, rect: { ...editorState.cropRect } };
+}
+
+// Crop handle drag (resize)
+function onCropHandleMouseDown(e) {
+    e.stopPropagation();
+    if (!editorState.open) return;
+    const handle = e.target.dataset.handle;
+    const coords = getCanvasCoords(e);
+    editorState.isDrawing = true;
+    editorState.cropDrag = 'resize-' + handle;
+    editorState.cropDragStart = { x: coords.x, y: coords.y, rect: { ...editorState.cropRect } };
 }
 
 function applyCrop() {
-    if (!editorState.cropStart || !editorState.cropEnd || !editorState.canvas) return;
+    if (!editorState.cropRect || !editorState.canvas) return;
     
-    const x1 = Math.min(editorState.cropStart.x, editorState.cropEnd.x);
-    const y1 = Math.min(editorState.cropStart.y, editorState.cropEnd.y);
-    const x2 = Math.max(editorState.cropStart.x, editorState.cropEnd.x);
-    const y2 = Math.max(editorState.cropStart.y, editorState.cropEnd.y);
-    
-    const w = x2 - x1;
-    const h = y2 - y1;
-    
-    if (w < 10 || h < 10) {
+    const r = editorState.cropRect;
+    if (r.w < 10 || r.h < 10) {
         showToast('Bereich zu klein', 'error');
         return;
     }
     
     // Extract cropped region
-    const imageData = editorState.ctx.getImageData(x1, y1, w, h);
+    const imageData = editorState.ctx.getImageData(r.x, r.y, r.w, r.h);
     
     // Create new canvas with cropped size
     const newCanvas = document.createElement('canvas');
-    newCanvas.width = w;
-    newCanvas.height = h;
+    newCanvas.width = r.w;
+    newCanvas.height = r.h;
     const newCtx = newCanvas.getContext('2d');
     newCtx.putImageData(imageData, 0, 0);
     
     // Replace main canvas
-    editorState.canvas.width = w;
-    editorState.canvas.height = h;
-    editorState.ctx.clearRect(0, 0, w, h);
+    editorState.canvas.width = r.w;
+    editorState.canvas.height = r.h;
+    editorState.ctx.clearRect(0, 0, r.w, r.h);
     editorState.ctx.drawImage(newCanvas, 0, 0);
     
     pushUndo();
     
     // Hide crop overlay
-    const cropOverlay = $('#cropOverlay');
-    if (cropOverlay) cropOverlay.style.display = 'none';
-    editorState.cropActive = false;
-    editorState.cropStart = null;
-    editorState.cropEnd = null;
+    hideCropOverlay();
+    editorState.cropRect = null;
     
     showToast('Bild zugeschnitten', 'success');
 }
@@ -2047,11 +2148,10 @@ on('#swapFileInput', 'change', (e) => {
 });
 on('#cropApply', 'click', applyCrop);
 on('#cropCancel', 'click', () => {
-    const cropOverlay = $('#cropOverlay');
-    if (cropOverlay) cropOverlay.style.display = 'none';
-    editorState.cropActive = false;
-    editorState.cropStart = null;
-    editorState.cropEnd = null;
+    hideCropOverlay();
+    editorState.cropRect = null;
+    editorState.cropDrag = null;
+    editorState.cropDragStart = null;
 });
 on('#brushSize', 'input', (e) => {
     const val = $('#brushSizeVal');
