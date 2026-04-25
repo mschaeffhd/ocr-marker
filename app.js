@@ -2371,13 +2371,11 @@ async function openCompareView() {
     
     compareViewOpen = true;
     compareCurrentPage = String(allPages[0]);
-    compareZoom = 1.0;
     
     const view = $('#compareView');
     if (view) view.style.display = 'block';
     
     await renderComparePage();
-    updateCompareZoom();
     
     // Scroll markdown preview to matching page
     scrollMdToPage(compareCurrentPage);
@@ -2389,7 +2387,6 @@ async function openCompareView() {
 function closeCompareView() {
     compareViewOpen = false;
     compareCurrentPage = '1';
-    compareZoom = 1.0;
     
     const view = $('#compareView');
     if (view) view.style.display = 'none';
@@ -2703,10 +2700,6 @@ function openCompareZoom(src, pageNum) {
 }
 
 // Comparison View Event Listeners
-on('#compareClose', 'click', () => {
-    closeCompareView();
-});
-
 on('#comparePrev', 'click', async () => {
     const allPages = Object.keys(comparePageMap).map(Number).sort((a, b) => a - b);
     const idx = allPages.indexOf(Number(compareCurrentPage));
@@ -2725,16 +2718,6 @@ on('#compareNext', 'click', async () => {
         await renderComparePage();
         scrollMdToPage(compareCurrentPage);
     }
-});
-
-on('#compareZoomIn', 'click', () => {
-    compareZoom = Math.min(compareZoom + 0.25, 3.0);
-    updateCompareZoom();
-});
-
-on('#compareZoomOut', 'click', () => {
-    compareZoom = Math.max(compareZoom - 0.25, 0.5);
-    updateCompareZoom();
 });
 
 // Keyboard navigation for comparison view
@@ -2756,8 +2739,6 @@ document.addEventListener('keydown', (e) => {
         const overlay = document.querySelector('.compare-zoom-overlay');
         if (overlay) {
             overlay.remove();
-        } else {
-            $('#compareClose')?.click();
         }
     }
 });
