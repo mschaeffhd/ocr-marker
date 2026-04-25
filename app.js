@@ -624,8 +624,10 @@ async function createZipArchive() {
     
     addLog('uploadLog', 'Erstelle ZIP-Archiv...', 'info');
     
-    // Add Markdown
-    zip.file(`${bookName}.md`, state.markdown);
+    // Add output file (Markdown or JSON)
+    const outputFormat = $('#outputFormat')?.value || 'markdown';
+    const ext = outputFormat === 'json' ? 'json' : 'md';
+    zip.file(`${bookName}.${ext}`, state.markdown);
     
     // Add images
     let imageCount = 0;
@@ -1325,7 +1327,31 @@ on('#btnCopyMd', 'click', () => {
     });
 });
 
-// Download markdown
+// Update UI based on output format selection
+function updateOutputFormatUI() {
+    const outputFormat = $('#outputFormat')?.value || 'markdown';
+    const isJson = outputFormat === 'json';
+    
+    const btnDocx = $('#btnDownloadDocx');
+    const btnMd = $('#btnDownloadMd');
+    const btnCopy = $('#btnCopyMd');
+    const exportPanel = $('#exportPanel');
+    
+    if (btnDocx) {
+        btnDocx.textContent = isJson ? '📄 JSON-Datei (.json)' : '📘 Word-Datei (.docx)';
+    }
+    if (btnMd) {
+        btnMd.style.display = isJson ? 'none' : '';
+    }
+    if (btnCopy) {
+        btnCopy.textContent = isJson ? '📋 Kopieren' : '📋 Kopieren';
+    }
+    if (exportPanel) {
+        exportPanel.style.display = isJson ? 'none' : '';
+    }
+}
+
+// Download markdown / json
 on('#btnDownloadMd', 'click', () => {
     const bookName = state.bookName || 'export';
     const mdWithNumbers = insertPageNumbers(state.markdown);
@@ -1354,13 +1380,29 @@ on('#btnDownloadZip', 'click', () => {
     showToast(`${bookName}.zip heruntergeladen`, 'success');
 });
 
-// Download Word handler
+// Download Word / JSON handler
 on('#btnDownloadDocx', 'click', async () => {
     if (!state.markdown) {
-        showToast('Kein Markdown vorhanden zum Exportieren', 'error');
+        showToast('Kein Inhalt vorhanden zum Exportieren', 'error');
         return;
     }
-    await exportToDocx();
+    
+    const outputFormat = $('#outputFormat')?.value || 'markdown';
+    if (outputFormat === 'json') {
+        // Download as JSON
+        const bookName = state.bookName || 'export';
+        const content = insertPageNumbers(state.markdown);
+        const blob = new Blob([content], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${bookName}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(`${bookName}.json heruntergeladen`, 'success');
+    } else {
+        await exportToDocx();
+    }
 });
 
 async function exportToDocx() {
@@ -1783,6 +1825,7 @@ function debounce(func, wait) {
 // Initialize
 loadConfig();
 updatePageNumberUI(); // Set initial visibility of page number options
+updateOutputFormatUI(); // Set initial visibility based on output format
 
 // Sidebar Toggle Logic
 function initSidebar() {
@@ -2341,6 +2384,12 @@ autoSaveChecks.forEach(sel => {
     on(sel, 'change', () => {
         if (typeof saveConfig === 'function') saveConfig();
     });
+});
+
+// Update UI when output format changes
+on('#outputFormat', 'change', () => {
+    updateOutputFormatUI();
+    if (typeof saveConfig === 'function') saveConfig();
 });
 
 // ===== Comparison View Functions =====
