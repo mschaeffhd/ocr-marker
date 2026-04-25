@@ -3,11 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
     <title>PDF → Markdown Pipeline</title>
-    <link rel="stylesheet" href="styles.css?v=20250425d">
+    <link rel="stylesheet" href="styles.css?v=20250422">
     <script src="lib/jszip.min.js"></script>
     <script src="lib/crypto-js.min.js"></script>
     <script src="lib/marked.min.js"></script>
@@ -29,7 +26,7 @@
     <div class="app">
         <header class="header">
             <div class="header-main">
-                <button id="sidebarToggle" class="btn btn-icon sidebar-toggle-premium" title="Einstellungen umschalten">
+                <button id="sidebarToggle" class="btn btn-icon sidebar-toggle-premium" title="Einstellungen umschalten" aria-label="Einstellungen umschalten">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <line x1="4" y1="21" x2="4" y2="14"></line>
                         <line x1="4" y1="10" x2="4" y2="3"></line>
@@ -56,7 +53,7 @@
                 <section class="config-panel" id="configPanel">
                     <div class="panel-header" data-toggle="configPanel">
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <button id="sidebarClose" class="btn-close-sidebar" title="Schließen">✕</button>
+                            <button id="sidebarClose" class="btn-close-sidebar" title="Schließen" aria-label="Einstellungen schließen">✕</button>
                             <span class="collapse-icon">▼</span>
                             <h2>⚙️ Basis-Einstellungen</h2>
                         </div>
@@ -293,13 +290,13 @@ Beschreibung: …  / Bildtext: …
                                         <span class="file-name" id="fileName"></span>
                                         <span class="file-size" id="fileSize"></span>
                                     </div>
-                                    <button class="btn-remove" id="removeFile">✕</button>
+                                    <button class="btn-remove" id="removeFile" aria-label="Datei entfernen">✕</button>
                                 </div>
                                 <div class="action-bar" style="display: flex; gap: 12px; margin-top: 12px;">
                                     <button class="btn btn-primary btn-start" id="btnStart" style="flex: 1; height: 50px; font-size: 1.1rem;">
                                         🚀 Pipeline starten
                                     </button>
-                                    <button class="btn btn-secondary" id="btnReset" style="width: 50px; height: 50px; padding: 0;" title="Pipeline zurücksetzen">
+                                    <button class="btn btn-secondary" id="btnReset" style="width: 50px; height: 50px; padding: 0;" title="Pipeline zurücksetzen" aria-label="Pipeline zurücksetzen">
                                         🔄
                                     </button>
                                 </div>
@@ -312,7 +309,8 @@ Beschreibung: …  / Bildtext: …
                                     </div>
                                     <div class="pdf-grid" id="pdfGrid"></div>
                                     <div class="pdf-preview-more" id="pdfPreviewMore" style="display:none;">
-                                        <span>… und weitere Seiten</span>
+                                        <span id="pdfPreviewMoreText">… und weitere Seiten</span>
+                                        <button class="btn btn-text" id="btnLoadAllPdf" style="margin-left: 8px;">Alle laden</button>
                                     </div>
                                 </div>
                             </div>
@@ -326,29 +324,29 @@ Beschreibung: …  / Bildtext: …
                                 </div>
                             </div>
                             <div class="step-body">
-                                <div class="pipeline-stats" id="conversionStats" style="display: none;">
-                                    <div class="stat-card">
-                                        <span class="stat-label">Zeichen</span>
-                                        <span class="stat-value" id="statChars">0</span>
-                                    </div>
-                                    <div class="stat-card">
-                                        <span class="stat-label">Bilder</span>
-                                        <span class="stat-value" id="statImages">0</span>
-                                    </div>
-                                    <div class="stat-card" id="uploadSummary" style="display:none;">
-                                        <span class="stat-label">Archiv</span>
-                                        <span class="stat-value" id="zipStatus">Wartend</span>
-                                    </div>
+                                <div class="pipeline-stats-compact" id="conversionStats" style="display: none;">
+                                    <span class="stat-item"><strong>Zeichen:</strong> <span id="statChars">0</span></span>
+                                    <span class="stat-divider">|</span>
+                                    <span class="stat-item"><strong>Bilder:</strong> <span id="statImages">0</span></span>
+                                    <span class="stat-divider" id="uploadDivider" style="display:none;">|</span>
+                                    <span class="stat-item" id="uploadSummary" style="display:none;"><strong>Archiv:</strong> <span id="zipStatus">Wartend</span></span>
                                 </div>
 
                                 <div class="markdown-actions">
-                                    <button class="btn btn-primary" id="btnDownloadDocx">📘 Word-Datei (.docx)</button>
+                                    <button class="btn btn-secondary" id="btnDownloadDocx">📘 Word-Datei (.docx)</button>
                                     <button class="btn btn-secondary" id="btnDownloadMd">📄 Markdown laden</button>
-                                    <button class="btn btn-primary" id="btnDownloadZip" style="display: none;">📦 Archiv (ZIP)</button>
+                                    <button class="btn btn-secondary" id="btnDownloadZip" style="display: none;">📦 Archiv (ZIP)</button>
                                     <button class="btn btn-secondary" id="btnCopyMd">📋 Kopieren</button>
                                 </div>
                                 
-                                <div class="results-layout">
+                                <div id="describeProgress" class="progress-container" style="display:none;">
+                                    <div class="progress-bar-wrapper">
+                                        <div id="progressFill" class="progress-fill"></div>
+                                    </div>
+                                    <span id="progressLabel" class="progress-label">0 / 0 Bilder</span>
+                                </div>
+                                
+                                <div class="results-layout-wrapper">
                                     <!-- Comparison View -->
                                     <div id="compareView" class="compare-view" style="display:none;">
                                         <div class="compare-header">
@@ -357,39 +355,40 @@ Beschreibung: …  / Bildtext: …
                                                 <span class="compare-page-info" id="comparePageInfo">Seite 0 von 0</span>
                                                 <button class="btn btn-secondary" id="compareNext">Nächste ▶</button>
                                             </div>
+
                                         </div>
                                         <div class="compare-layout">
-                                            <div class="compare-panel compare-panel-original">
-                                                <div class="compare-panel-label">📄 Original PDF</div>
+                                            <div class="compare-panel compare-panel-original" id="panelOriginal">
+                                                <div class="compare-panel-label" title="Klicken zum Ein/Ausblenden" style="cursor:pointer;" onclick="togglePanel('panelOriginal')">
+                                                    <span>📄 Original PDF</span>
+                                                    <span class="panel-toggle-icon">◀</span>
+                                                </div>
                                                 <div class="compare-panel-content" id="compareOriginal"></div>
                                             </div>
-                                            <div class="compare-panel compare-panel-extracted">
-                                                <div class="compare-panel-label">
+                                            <div class="compare-panel compare-panel-extracted" id="panelExtracted">
+                                                <div class="compare-panel-label" title="Klicken zum Ein/Ausblenden" style="cursor:pointer;" onclick="togglePanel('panelExtracted')">
                                                     <span>🎯 Erkannte Bilder</span>
                                                     <span class="compare-badge" id="compareBadge">0</span>
+                                                    <span class="panel-toggle-icon">◀</span>
                                                 </div>
                                                 <div class="compare-panel-content" id="compareExtracted"></div>
                                             </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="results-layout-right">
-                                        <div id="describeProgress" class="progress-container" style="display:none;">
-                                            <div class="progress-bar-wrapper">
-                                                <div id="progressFill" class="progress-fill"></div>
-                                            </div>
-                                            <span id="progressLabel" class="progress-label">0 / 0 Bilder</span>
-                                        </div>
-
-                                        <div class="md-preview-container">
-                                            <div class="md-preview-toolbar">
-                                                <button class="toolbar-btn active" data-view="split">Split</button>
-                                                <button class="toolbar-btn" data-view="rendered">Vorschau</button>
-                                                <button class="toolbar-btn" data-view="markdown">Source</button>
-                                            </div>
-                                            <div class="md-preview">
-                                                <div class="md-source" id="mdSource"></div>
-                                                <div class="md-rendered" id="mdRendered" style="display:none"></div>
+                                            <div class="compare-panel compare-panel-markdown" id="panelMarkdown">
+                                                <div class="compare-panel-label" title="Klicken zum Ein/Ausblenden" style="cursor:pointer;" onclick="togglePanel('panelMarkdown')">
+                                                    <span>📝 Vorschau</span>
+                                                    <div class="compare-panel-toolbar" onclick="event.stopPropagation()">
+                                                        <button class="toolbar-btn active" data-view="split">Split</button>
+                                                        <button class="toolbar-btn" data-view="rendered">Vorschau</button>
+                                                        <button class="toolbar-btn" data-view="markdown">Source</button>
+                                                    </div>
+                                                    <span class="panel-toggle-icon">◀</span>
+                                                </div>
+                                                <div class="compare-panel-content">
+                                                    <div class="md-preview">
+                                                        <div class="md-source" id="mdSource"></div>
+                                                        <div class="md-rendered" id="mdRendered" style="display:none"></div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -475,6 +474,6 @@ Beschreibung: …  / Bildtext: …
         </div>
     </div>
 
-    <script src="app.js?v=20250425d"></script>
+    <script src="app.js"></script>
 </body>
 </html>

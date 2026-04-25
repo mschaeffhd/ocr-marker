@@ -74,7 +74,7 @@ let pdfArrayBuffer = null; // cached for on-demand rendering
 let compareViewOpen = false;
 let compareCurrentPage = '1';
 let comparePageMap = {}; // {pageNum: {pdfPage, extractedImages[], descriptions[]}}
-let compareZoom = 1.0;
+
 
 // ===== Markdown Sync State =====
 let mdPageOffsets = {}; // {pageNum: htmlElementId}
@@ -645,7 +645,8 @@ async function createZipArchive() {
     
     // Update summary safely
     safeText('#zipStatus', 'Erstellt');
-    safeStyle('#uploadSummary', 'display', 'block');
+    safeStyle('#uploadSummary', 'display', 'inline');
+    safeStyle('#uploadDivider', 'display', 'inline');
     safeStyle('#btnDownloadZip', 'display', 'inline-flex');
     
     addLog('conversionLog', `ZIP-Archiv fertiggestellt mit ${imageCount} Bildern`, 'success');
@@ -691,6 +692,7 @@ async function runPipeline() {
     if ($('#describeProgress')) $('#describeProgress').style.display = 'none';
     if ($('#imageThumbnails')) $('#imageThumbnails').innerHTML = '';
     if ($('#uploadSummary')) $('#uploadSummary').style.display = 'none';
+    if ($('#uploadDivider')) $('#uploadDivider').style.display = 'none';
     if ($('#btnDownloadZip')) $('#btnDownloadZip').style.display = 'none';
     
     try {
@@ -1020,8 +1022,8 @@ async function renderPdfPreview(file) {
         }
         
         if (pdfTotalPages > maxPreviewPages) {
-            more.style.display = 'block';
-            more.querySelector('span').textContent = `… und ${pdfTotalPages - maxPreviewPages} weitere Seiten (werden bei Bedarf nachgeladen)`;
+            more.style.display = 'flex'; // Use flex for alignment
+            safeText('#pdfPreviewMoreText', `… und ${pdfTotalPages - maxPreviewPages} weitere Seiten (werden bei Bedarf nachgeladen)`);
         } else {
             more.style.display = 'none';
         }
@@ -1031,6 +1033,45 @@ async function renderPdfPreview(file) {
         showToast('PDF-Vorschau konnte nicht geladen werden', 'error');
     }
 }
+
+// Load the rest of PDF thumbnails
+on('#btnLoadAllPdf', 'click', async () => {
+    if (!pdfDocument) return;
+    
+    const more = $('#pdfPreviewMore');
+    const btn = $('#btnLoadAllPdf');
+    const grid = $('#pdfGrid');
+    
+    btn.disabled = true;
+    btn.textContent = 'Lädt...';
+    
+    const startNum = Object.keys(pdfPageImages).length + 1;
+    
+    for (let i = startNum; i <= pdfTotalPages; i++) {
+        const page = await pdfDocument.getPage(i);
+        const viewport = page.getViewport({ scale: 0.3 });
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        
+        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+        
+        const base64 = canvas.toDataURL('image/jpeg', 0.7);
+        pdfPageImages[i] = base64;
+        
+        const thumb = document.createElement('div');
+        thumb.className = 'pdf-thumb';
+        thumb.innerHTML = `
+            <img src="${base64}" alt="Seite ${i}">
+            <span class="pdf-thumb-page">${i}</span>
+        `;
+        thumb.addEventListener('click', () => openPdfZoom(base64, i));
+        grid.appendChild(thumb);
+    }
+    
+    if (more) more.style.display = 'none';
+});
 
 // Render a single PDF page on demand (for comparison view) - always HD, no thumbnail cache overwrite
 async function renderPdfPageOnDemand(pageNum) {
@@ -2307,10 +2348,8 @@ autoSaveChecks.forEach(sel => {
 function buildComparePageMap() {
     const map = {};
     
-    // 1. Add all rendered PDF pages (PDF pages are 1-based)
+    // 1. Add all rendered PDF pages
     for (const pageNum of Object.keys(pdfPageImages)) {
-        // Skip page 0 if it somehow exists (PDF pages start at 1)
-        if (pageNum === '0') continue;
         map[pageNum] = {
             pdfPage: pdfPageImages[pageNum],
             extractedImages: [],
@@ -2328,9 +2367,7 @@ function buildComparePageMap() {
             match = fname.match(/(\d+)/);
         }
         if (match) {
-            let pageNum = match[1];
-            // Map page 0 to page 1 (PDFs are 1-based, some tools use 0-based indexing)
-            if (pageNum === '0') pageNum = '1';
+            const pageNum = match[1];
             if (!map[pageNum]) {
                 map[pageNum] = { pdfPage: null, extractedImages: [], descriptions: [], fnames: [] };
             }
@@ -2371,11 +2408,13 @@ async function openCompareView() {
     
     compareViewOpen = true;
     compareCurrentPage = String(allPages[0]);
+
     
     const view = $('#compareView');
     if (view) view.style.display = 'block';
     
     await renderComparePage();
+
     
     // Scroll markdown preview to matching page
     scrollMdToPage(compareCurrentPage);
@@ -2384,13 +2423,7 @@ async function openCompareView() {
     setTimeout(() => view?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
 }
 
-function closeCompareView() {
-    compareViewOpen = false;
-    compareCurrentPage = '1';
-    
-    const view = $('#compareView');
-    if (view) view.style.display = 'none';
-}
+
 
 function scrollMdToPage(pageNum) {
     // Try rendered view first
@@ -2512,7 +2545,7 @@ async function renderComparePage() {
                              title="Klicken zum Bearbeiten">
                         <div class="compare-image-actions">
                             <textarea id="${textareaId}" class="compare-desc-textarea" 
-                                placeholder="Beschreibung eingeben..." rows="3">${escapeHtml(desc)}</textarea>
+                                placeholder="Beschreibung eingeben..." rows="6">${escapeHtml(desc)}</textarea>
                             <div class="compare-image-buttons">
                                 <button class="btn btn-primary btn-save-desc" data-fname="${fname}" data-ta="${textareaId}" style="font-size:0.8rem;padding:4px 10px;">
                                     💾 Speichern
@@ -2675,13 +2708,7 @@ async function reDescribeImage(fname) {
     }
 }
 
-function updateCompareZoom() {
-    const zoomDisplay = $('#compareZoomLevel');
-    if (zoomDisplay) zoomDisplay.textContent = Math.round(compareZoom * 100) + '%';
-    
-    // Re-render to apply zoom
-    renderComparePage();
-}
+
 
 function openCompareZoom(src, pageNum) {
     const overlay = document.createElement('div');
@@ -2699,7 +2726,8 @@ function openCompareZoom(src, pageNum) {
     document.body.appendChild(overlay);
 }
 
-// Comparison View Event Listeners
+
+
 on('#comparePrev', 'click', async () => {
     const allPages = Object.keys(comparePageMap).map(Number).sort((a, b) => a - b);
     const idx = allPages.indexOf(Number(compareCurrentPage));
@@ -2719,6 +2747,8 @@ on('#compareNext', 'click', async () => {
         scrollMdToPage(compareCurrentPage);
     }
 });
+
+
 
 // Keyboard navigation for comparison view
 document.addEventListener('keydown', (e) => {
@@ -2743,8 +2773,73 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// Expose for testing
-window.pipelineState = state;
-window.runPipeline = runPipeline;
+
+// ===== Layout Toggle Functions =====
+function togglePanel(panelId) {
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+    
+    panel.classList.toggle('panel-minimized');
+    
+    const icon = panel.querySelector('.panel-toggle-icon');
+    if (icon) {
+        icon.textContent = panel.classList.contains('panel-minimized') ? '▶' : '◀';
+    }
+    
+    // Smooth layout adjustment
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 300);
+}
+
+
+
+// ===== Keyboard Shortcuts =====
+function initShortcuts() {
+    document.addEventListener('keydown', (e) => {
+        // Skip if typing in a text field
+        if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+             // Exception: ESC should still work to blur
+             if (e.key === 'Escape') document.activeElement.blur();
+             return;
+        }
+
+        // Use Alt as modifier
+        if (e.altKey) {
+            switch(e.key.toLowerCase()) {
+                case 'p': // Pipeline starten
+                    e.preventDefault();
+                    $('#btnStart')?.click();
+                    break;
+                case 's': // Word anfordern
+                    e.preventDefault();
+                    $('#btnDownloadDocx')?.click();
+                    break;
+                case 'm': // Markdown laden
+                    e.preventDefault();
+                    $('#btnDownloadMd')?.click();
+                    break;
+                case 'c': // Kopieren
+                    e.preventDefault();
+                    $('#btnCopyMd')?.click();
+                    break;
+                case 'r': // Reset
+                    e.preventDefault();
+                    $('#btnReset')?.click();
+                    break;
+                case 'e': // Einstellungen (Sidebar)
+                    e.preventDefault();
+                    $('#sidebarToggle')?.click();
+                    break;
+            }
+        }
+    });
+    
+    debugLog('Tastenkürzel aktiviert: Alt+P (Start), Alt+S (Word), Alt+M (MD), Alt+C (Copy), Alt+E (Settings)', 'info');
+}
+
+// Initialisiere Zusatzfunktionen
+initShortcuts();
+
+// Export for HTML onclick calls
+window.togglePanel = togglePanel;
 
 console.log('PDF Pipeline Frontend loaded! 🚀');
