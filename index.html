@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF → Markdown Pipeline</title>
-    <link rel="stylesheet" href="styles.css?v=20250422">
+    <link rel="stylesheet" href="styles.css?v=20250426">
     <script src="lib/jszip.min.js"></script>
     <script src="lib/crypto-js.min.js"></script>
     <script src="lib/marked.min.js"></script>
@@ -60,19 +60,6 @@
                     </div>
                     <div class="panel-body">
                         <div class="form-group">
-                            <label for="apiToken">OpenWebUI API Token</label>
-                            <input type="password" id="apiToken" value="" placeholder="sk-...">
-                        </div>
-                        <div class="form-group">
-                            <label for="modelSelect">KI-Modell</label>
-                            <select id="modelSelect">
-                                <option value="">Lade Modelle...</option>
-                            </select>
-                        </div>
-                        <div style="text-align: right; margin-top: -8px;">
-                            <button class="btn btn-text" id="btnReloadModels" title="Modelle neu laden">🔄 Modelle neu laden</button>
-                        </div>
-                        <div class="form-group">
                             <label for="imagePrompt">Bilderkennungs-Prompt</label>
                             <textarea id="imagePrompt" rows="10" placeholder="Prompt für die KI-Bildbeschreibung...">Describe illustrations comprehensively in German. Use the following internal structure:
 
@@ -84,14 +71,6 @@ Beschreibung: …  / Bildtext: …
 * Place captions and titles above the ((Bild))((/Bild)) tag if they exist in the source.
 * Use LaTeX for ALL mathematical expressions.
 * If there is text in the image stick with the language it is written in and don't translate it.</textarea>
-                        </div>
-                        <div class="form-group">
-                            <label for="markerServerUrl">Marker Server URL</label>
-                            <input type="text" id="markerServerUrl" value="./api/marker/upload" placeholder="./api/marker/upload">
-                        </div>
-                        <div class="form-group">
-                            <label for="openwebuiUrl">OpenWebUI URL</label>
-                            <input type="text" id="openwebuiUrl" value="https://openwebui.sbbz-ilvesheim.de/api" placeholder="https://openwebui.sbbz-ilvesheim.de/api">
                         </div>
                         <div class="checkbox-group">
                             <label for="forceOcr">Force OCR</label>
@@ -131,35 +110,7 @@ Beschreibung: …  / Bildtext: …
                     </div>
                 </section>
 
-                <!-- 2. Experimentelle-Einstellungen (nun sichtbar, direkt nach Basis) -->
-                <section class="config-panel" id="expPanel">
-                    <div class="panel-header" data-toggle="expPanel">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span class="collapse-icon">▼</span>
-                            <h2>🧪 Experimentelle-Einstellungen</h2>
-                        </div>
-                    </div>
-                    <div class="panel-body">
-                        <div class="checkbox-group">
-                            <label for="useLlm">Use LLM</label>
-                            <input type="checkbox" id="useLlm">
-                        </div>
-                        <div class="checkbox-group">
-                            <label for="stripExistingOcr">Strip Existing OCR</label>
-                            <input type="checkbox" id="stripExistingOcr">
-                        </div>
-                        <div class="checkbox-group">
-                            <label for="redoInlineMath">Redo Inline Math</label>
-                            <input type="checkbox" id="redoInlineMath">
-                        </div>
-                        <div class="checkbox-group">
-                            <label for="disableImageExtraction">Disable Image Extraction</label>
-                            <input type="checkbox" id="disableImageExtraction">
-                        </div>
-                    </div>
-                </section>
-
-                <!-- 3. Export-Formatierung -->
+                <!-- 2. Export-Formatierung -->
                 <section class="config-panel" id="exportPanel">
                     <div class="panel-header" data-toggle="exportPanel">
                         <div style="display: flex; align-items: center; gap: 8px;">
@@ -256,6 +207,67 @@ Beschreibung: …  / Bildtext: …
                                     <option value="1.5">Groß (1.5)</option>
                                 </select>
                             </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. API-Einstellungen -->
+                <section class="config-panel" id="apiPanel">
+                    <div class="panel-header" data-toggle="apiPanel">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span class="collapse-icon">▼</span>
+                            <h2>🔌 API-Einstellungen</h2>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="form-group">
+                            <label for="apiToken">OpenWebUI API Token</label>
+                            <input type="password" id="apiToken" value="" placeholder="sk-...">
+                        </div>
+                        <div class="form-group">
+                            <label for="modelSelect">KI-Modell</label>
+                            <select id="modelSelect">
+                                <option value="">Lade Modelle...</option>
+                            </select>
+                        </div>
+                        <div style="text-align: right; margin-top: -8px;">
+                            <button class="btn btn-text" id="btnReloadModels" title="Modelle neu laden">🔄 Modelle neu laden</button>
+                        </div>
+                        <div class="form-group">
+                            <label for="markerServerUrl">Marker Server URL</label>
+                            <input type="text" id="markerServerUrl" value="./api/marker/upload" placeholder="./api/marker/upload">
+                        </div>
+                        <div class="form-group">
+                            <label for="openwebuiUrl">OpenWebUI URL</label>
+                            <input type="text" id="openwebuiUrl" value="https://openwebui.sbbz-ilvesheim.de/api" placeholder="https://openwebui.sbbz-ilvesheim.de/api">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. Experimentelle-Einstellungen -->
+                <section class="config-panel" id="expPanel">
+                    <div class="panel-header" data-toggle="expPanel">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span class="collapse-icon">▼</span>
+                            <h2>🧪 Experimentelle-Einstellungen</h2>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="checkbox-group">
+                            <label for="useLlm">Use LLM</label>
+                            <input type="checkbox" id="useLlm">
+                        </div>
+                        <div class="checkbox-group">
+                            <label for="stripExistingOcr">Strip Existing OCR</label>
+                            <input type="checkbox" id="stripExistingOcr">
+                        </div>
+                        <div class="checkbox-group">
+                            <label for="redoInlineMath">Redo Inline Math</label>
+                            <input type="checkbox" id="redoInlineMath">
+                        </div>
+                        <div class="checkbox-group">
+                            <label for="disableImageExtraction">Disable Image Extraction</label>
+                            <input type="checkbox" id="disableImageExtraction">
                         </div>
                     </div>
                 </section>
