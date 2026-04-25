@@ -1,525 +1,501 @@
-<!DOCTYPE html>
-<html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF → Markdown Pipeline</title>
-    <link rel="stylesheet" href="styles.css?v=20250426">
-    <script src="lib/jszip.min.js"></script>
-    <script src="lib/crypto-js.min.js"></script>
-    <script src="lib/marked.min.js"></script>
-    <script src="lib/html-docx.js"></script>
-    <script src="lib/FileSaver.min.js"></script>
-    <script src="lib/fabric.min.js"></script>
-    <script src="lib/pdf.min.js"></script>
-    <script>
-        if (typeof pdfjsLib !== 'undefined') {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
-        }
-    </script>
-    <link rel="icon" href="icon-512.png"/>
-    <link rel="apple-touch-icon" href="icon-512.png"/>
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#4f46e5">
-</head>
-<body>
-    <div class="app">
-        <header class="header">
-            <div class="header-main">
-                <button id="sidebarToggle" class="btn btn-icon sidebar-toggle-premium" title="Einstellungen umschalten" aria-label="Einstellungen umschalten">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="4" y1="21" x2="4" y2="14"></line>
-                        <line x1="4" y1="10" x2="4" y2="3"></line>
-                        <line x1="12" y1="21" x2="12" y2="12"></line>
-                        <line x1="12" y1="8" x2="12" y2="3"></line>
-                        <line x1="20" y1="21" x2="20" y2="16"></line>
-                        <line x1="20" y1="12" x2="20" y2="3"></line>
-                        <line x1="1" y1="14" x2="7" y2="14"></line>
-                        <line x1="9" y1="8" x2="15" y2="8"></line>
-                        <line x1="17" y1="16" x2="23" y2="16"></line>
-                    </svg>
-                </button>
-                <div class="logo" id="logoClick" title="Tastenkombinationen anzeigen" style="cursor: pointer;">
-                    <img src="logo-ssilv.png" alt="Schloss-Schule Ilvesheim" style="height: 40px; width: auto;">
-                </div>
-                <div class="header-title">
-                    <p class="subtitle">PDF zu E-Buch</p>
-                    <span class="version-badge" id="versionBadge">v2.26</span>
-                </div>
-            </div>
-        </header>
-
-        <div class="dashboard-grid">
-            <!-- Left Column: Config -->
-            <aside class="sidebar">
-                <!-- 1. Basis-Einstellungen -->
-                <section class="config-panel" id="configPanel">
-                    <div class="panel-header" data-toggle="configPanel">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <button id="sidebarClose" class="btn-close-sidebar" title="Schließen" aria-label="Einstellungen schließen">✕</button>
-                            <span class="collapse-icon">▼</span>
-                            <h2>⚙️ Basis-Einstellungen</h2>
-                        </div>
-                    </div>
-                    <div class="panel-body">
-                        <div class="form-group">
-                            <label for="imagePrompt">Bilderkennungs-Prompt</label>
-                            <textarea id="imagePrompt" rows="10" placeholder="Prompt für die KI-Bildbeschreibung...">Describe illustrations comprehensively in German. Use the following internal structure:
-
-((Bild))
-Art der Abbildung (z. B. Foto, Zeichnung, Diagramm):
-Beschreibung: …  / Bildtext: …
-((/Bild))
-
-* Place captions and titles above the ((Bild))((/Bild)) tag if they exist in the source.
-* Use LaTeX for ALL mathematical expressions.
-* If there is text in the image stick with the language it is written in and don't translate it.</textarea>
-                        </div>
-                        <div class="checkbox-group">
-                            <label for="forceOcr">Force OCR</label>
-                            <input type="checkbox" id="forceOcr">
-                        </div>
-                        <div class="checkbox-group">
-                            <label for="paginateOutput">Paginate Output</label>
-                            <input type="checkbox" id="paginateOutput">
-                        </div>
-                        <div id="pageNumberOptions" class="page-number-options" style="display:none; padding-left: 16px; border-left: 2px solid var(--border); margin-left: 4px;">
-                            <div class="checkbox-group">
-                                <label for="showPageNumbers">Seitenzahl in Doppelklammer anzeigen</label>
-                                <input type="checkbox" id="showPageNumbers">
-                            </div>
-                            <div id="pageNumberInputs" style="display:none;">
-                                <div class="form-group">
-                                    <label for="pageNumberStart">Seitennummerierung ab Seite</label>
-                                    <input type="number" id="pageNumberStart" value="1" min="1">
-                                </div>
-                                <div class="form-group">
-                                    <label for="pageNumberInitial">Nummerierung starten mit</label>
-                                    <input type="number" id="pageNumberInitial" value="1" min="0">
-                                </div>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="outputFormat">Output Format</label>
-                            <select id="outputFormat">
-                                <option value="markdown">Markdown</option>
-                                <option value="json">JSON</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="pageRange">Page Range</label>
-                            <input type="text" id="pageRange" placeholder="z.B. 1-10,15">
-                        </div>
-                    </div>
-                </section>
-
-                <!-- 2. Export-Formatierung -->
-                <section class="config-panel" id="exportPanel">
-                    <div class="panel-header" data-toggle="exportPanel">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span class="collapse-icon">▼</span>
-                            <h2>📝 Export-Formatierung</h2>
-                        </div>
-                    </div>
-                    <div class="panel-body">
-                        <div class="checkbox-grid">
-                            <div class="checkbox-group">
-                                <label for="docx-opt-unit-cm">Einheiten bereinigen</label>
-                                <input type="checkbox" id="docx-opt-unit-cm" checked>
-                            </div>
-                            <div class="checkbox-group">
-                                <label for="docx-opt-unit-circ">^circ zu °</label>
-                                <input type="checkbox" id="docx-opt-unit-circ" checked>
-                            </div>
-                            <div class="checkbox-group">
-                                <label for="docx-opt-latex-space-block">$$ Spaces</label>
-                                <input type="checkbox" id="docx-opt-latex-space-block" checked>
-                            </div>
-                            <div class="checkbox-group">
-                                <label for="docx-opt-latex-space-inline">$ Spaces</label>
-                                <input type="checkbox" id="docx-opt-latex-space-inline" checked>
-                            </div>
-                            <div class="checkbox-group">
-                                <label for="docx-opt-greek">Griechisch zu LaTeX</label>
-                                <input type="checkbox" id="docx-opt-greek" checked>
-                            </div>
-                            <div class="checkbox-group">
-                                <label for="docx-opt-supsub">Hoch/Tiefzahlen</label>
-                                <input type="checkbox" id="docx-opt-supsub" checked>
-                            </div>
-                            <div class="checkbox-group">
-                                <label for="docx-opt-nonascii">Sonderzeichen zu LaTeX</label>
-                                <input type="checkbox" id="docx-opt-nonascii" checked>
-                            </div>
-                            <div class="checkbox-group">
-                                <label for="docx-opt-nbsp-narrow">NBSP schmal</label>
-                                <input type="checkbox" id="docx-opt-nbsp-narrow" checked>
-                            </div>
-                            <div class="checkbox-group">
-                                <label for="docx-opt-quotes">Typogr. Anführungsz.</label>
-                                <input type="checkbox" id="docx-opt-quotes" checked>
-                            </div>
-                            <div class="checkbox-group">
-                                <label for="docx-opt-hyphens">Gedankenstriche</label>
-                                <input type="checkbox" id="docx-opt-hyphens" checked>
-                            </div>
-                            <div class="checkbox-group">
-                                <label for="docx-opt-whitespace">Unsichtbare Zeichen</label>
-                                <input type="checkbox" id="docx-opt-whitespace" checked>
-                            </div>
-                            <div class="checkbox-group">
-                                <label for="docx-opt-latex">LaTeX rendern (&lt;L&gt;)</label>
-                                <input type="checkbox" id="docx-opt-latex" checked>
-                            </div>
-                            <div class="checkbox-group">
-                                <label for="docx-opt-dollar">$ entfernen</label>
-                                <input type="checkbox" id="docx-opt-dollar" checked>
-                            </div>
-                            <div class="checkbox-group">
-                                <label for="docx-opt-cdot">\cdot zu *</label>
-                                <input type="checkbox" id="docx-opt-cdot" checked>
-                            </div>
-                            <div class="checkbox-group">
-                                <label for="docx-opt-images">Bilder-Tags</label>
-                                <input type="checkbox" id="docx-opt-images" checked>
-                            </div>
-                            <div class="checkbox-group">
-                                <label for="docx-opt-dashes">Trennlinien entfernen</label>
-                                <input type="checkbox" id="docx-opt-dashes" checked>
-                            </div>
-                            <div class="checkbox-group">
-                                <label for="docx-opt-pagebreak">Seitenumbruch</label>
-                                <input type="checkbox" id="docx-opt-pagebreak">
-                            </div>
-                        </div>
-                        <div style="display: flex; gap: 12px; margin-top: 12px;">
-                            <div class="form-group" style="flex: 1;">
-                                <label for="docxFontSize">Schriftgröße (pt)</label>
-                                <select id="docxFontSize">
-                                    <option value="10">10 pt</option>
-                                    <option value="11">11 pt</option>
-                                    <option value="12" selected>12 pt</option>
-                                    <option value="14">14 pt</option>
-                                </select>
-                            </div>
-                            <div class="form-group" style="flex: 1;">
-                                <label for="docxLineSpacing">Zeilenabstand</label>
-                                <select id="docxLineSpacing">
-                                    <option value="1" selected>Standard (1.0)</option>
-                                    <option value="1.15">Erweitert (1.15)</option>
-                                    <option value="1.5">Groß (1.5)</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- 3. API-Einstellungen -->
-                <section class="config-panel" id="apiPanel">
-                    <div class="panel-header" data-toggle="apiPanel">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span class="collapse-icon">▼</span>
-                            <h2>🔌 API-Einstellungen</h2>
-                        </div>
-                    </div>
-                    <div class="panel-body">
-                        <div class="form-group">
-                            <label for="apiToken">OpenWebUI API Token</label>
-                            <input type="password" id="apiToken" value="" placeholder="sk-...">
-                        </div>
-                        <div class="form-group">
-                            <label for="modelSelect">KI-Modell</label>
-                            <select id="modelSelect">
-                                <option value="">Lade Modelle...</option>
-                            </select>
-                        </div>
-                        <div style="text-align: right; margin-top: -8px;">
-                            <button class="btn btn-text" id="btnReloadModels" title="Modelle neu laden">🔄 Modelle neu laden</button>
-                        </div>
-                        <div class="form-group">
-                            <label for="markerServerUrl">Marker Server URL</label>
-                            <input type="text" id="markerServerUrl" value="./api/marker/upload" placeholder="./api/marker/upload">
-                        </div>
-                        <div class="form-group">
-                            <label for="openwebuiUrl">OpenWebUI URL</label>
-                            <input type="text" id="openwebuiUrl" value="https://openwebui.sbbz-ilvesheim.de/api" placeholder="https://openwebui.sbbz-ilvesheim.de/api">
-                        </div>
-                    </div>
-                </section>
-
-                <!-- 4. Experimentelle-Einstellungen -->
-                <section class="config-panel" id="expPanel">
-                    <div class="panel-header" data-toggle="expPanel">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span class="collapse-icon">▼</span>
-                            <h2>🧪 Experimentelle-Einstellungen</h2>
-                        </div>
-                    </div>
-                    <div class="panel-body">
-                        <div class="checkbox-group">
-                            <label for="useLlm">Use LLM</label>
-                            <input type="checkbox" id="useLlm">
-                        </div>
-                        <div class="checkbox-group">
-                            <label for="stripExistingOcr">Strip Existing OCR</label>
-                            <input type="checkbox" id="stripExistingOcr">
-                        </div>
-                        <div class="checkbox-group">
-                            <label for="redoInlineMath">Redo Inline Math</label>
-                            <input type="checkbox" id="redoInlineMath">
-                        </div>
-                        <div class="checkbox-group">
-                            <label for="disableImageExtraction">Disable Image Extraction</label>
-                            <input type="checkbox" id="disableImageExtraction">
-                        </div>
-                    </div>
-                </section>
-            </aside>
-
-            <!-- Right Column: Pipeline & Results -->
-            <main class="main-content">
-                <section class="pipeline">
-                    <div class="pipeline-title">
-                        <h2>Pipeline Workflow</h2>
-                        <div class="progress-summary">
-                            <span id="progressText">Bereit</span>
-                        </div>
-                    </div>
-
-                    <div class="pipeline-steps">
-                        <div class="pipeline-step active" data-step="1">
-                            <div class="step-header">
-                                <div class="step-number">1</div>
-                                <div class="step-info">
-                                    <h3 class="step-title">PDF Datei</h3>
-                                </div>
-                            </div>
-                            <div class="step-body">
-                                <div class="drop-zone" id="dropZone">
-                                    <p class="drop-text">PDF oder Bild hier ablegen oder <span class="browse-link">wählen</span></p>
-                                    <input type="file" id="pdfInput" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif" style="display:none">
-                                </div>
-                                <div class="file-info" id="fileInfo" style="display:none">
-                                    <div class="file-icon">📄</div>
-                                    <div class="file-details">
-                                        <span class="file-name" id="fileName"></span>
-                                        <span class="file-size" id="fileSize"></span>
-                                    </div>
-                                    <button class="btn-remove" id="removeFile" aria-label="Datei entfernen">✕</button>
-                                </div>
-                                <div class="action-bar" style="display: flex; gap: 12px; margin-top: 12px;">
-                                    <button class="btn btn-primary btn-start" id="btnStart" style="flex: 1; height: 50px; font-size: 1.1rem;">
-                                        🚀 Pipeline starten
-                                    </button>
-                                    <button class="btn btn-secondary" id="btnReset" style="width: 50px; height: 50px; padding: 0;" title="Pipeline zurücksetzen" aria-label="Pipeline zurücksetzen">
-                                        🔄
-                                    </button>
-                                </div>
-                                
-                                <!-- PDF Preview -->
-                                <div id="pdfPreview" class="pdf-preview" style="display:none;">
-                                    <div class="pdf-preview-header">
-                                        <h4>📄 PDF-Vorschau</h4>
-                                        <span class="pdf-preview-count" id="pdfPreviewCount"></span>
-                                    </div>
-                                    <div class="pdf-grid" id="pdfGrid"></div>
-                                    <div class="pdf-preview-more" id="pdfPreviewMore" style="display:none;">
-                                        <span id="pdfPreviewMoreText">… und weitere Seiten</span>
-                                        <button class="btn btn-text" id="btnLoadAllPdf" style="margin-left: 8px;">Alle laden</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="pipeline-step" data-step="4">
-                            <div class="step-header">
-                                <div class="step-number">2</div>
-                                <div class="step-info">
-                                    <h3 class="step-title">Ergebnisse & Export</h3>
-                                </div>
-                            </div>
-                            <div class="step-body">
-                                <div class="pipeline-stats-compact" id="conversionStats" style="display: none;">
-                                    <span class="stat-item"><strong>Zeichen:</strong> <span id="statChars">0</span></span>
-                                    <span class="stat-divider">|</span>
-                                    <span class="stat-item"><strong>Bilder:</strong> <span id="statImages">0</span></span>
-                                    <span class="stat-divider" id="uploadDivider" style="display:none;">|</span>
-                                    <span class="stat-item" id="uploadSummary" style="display:none;"><strong>Archiv:</strong> <span id="zipStatus">Wartend</span></span>
-                                </div>
-
-                                <div class="markdown-actions">
-                                    <button class="btn btn-secondary" id="btnDownloadDocx">📘 Word-Datei (.docx)</button>
-                                    <button class="btn btn-secondary" id="btnDownloadMd">📄 Markdown laden</button>
-                                    <button class="btn btn-secondary" id="btnDownloadZip" style="display: none;">📦 Archiv (ZIP)</button>
-                                    <button class="btn btn-secondary" id="btnCopyMd">📋 Kopieren</button>
-                                </div>
-                                
-                                <div id="describeProgress" class="progress-container" style="display:none;">
-                                    <div class="progress-bar-wrapper">
-                                        <div id="progressFill" class="progress-fill"></div>
-                                    </div>
-                                    <span id="progressLabel" class="progress-label">0 / 0 Bilder</span>
-                                </div>
-                                
-                                <div class="results-layout-wrapper">
-                                    <!-- Comparison View -->
-                                    <div id="compareView" class="compare-view" style="display:none;">
-                                        <div class="compare-header">
-                                            <div class="compare-nav">
-                                                <button class="btn btn-secondary" id="comparePrev">◀ Vorherige</button>
-                                                <span class="compare-page-info" id="comparePageInfo">Seite 0 von 0</span>
-                                                <button class="btn btn-secondary" id="compareNext">Nächste ▶</button>
-                                            </div>
-
-                                        </div>
-                                        <div class="compare-layout">
-                                            <div class="compare-panel compare-panel-original" id="panelOriginal">
-                                                <div class="compare-panel-label" title="Klicken zum Ein/Ausblenden" style="cursor:pointer;" onclick="togglePanel('panelOriginal')">
-                                                    <span>📄 Original PDF</span>
-                                                    <span class="panel-toggle-icon">◀</span>
-                                                </div>
-                                                <div class="compare-panel-content" id="compareOriginal"></div>
-                                            </div>
-                                            <div class="compare-panel compare-panel-extracted" id="panelExtracted">
-                                                <div class="compare-panel-label" title="Klicken zum Ein/Ausblenden" style="cursor:pointer;" onclick="togglePanel('panelExtracted')">
-                                                    <span>🎯 Erkannte Bilder</span>
-                                                    <span class="compare-badge" id="compareBadge">0</span>
-                                                    <span class="panel-toggle-icon">◀</span>
-                                                </div>
-                                                <div class="compare-panel-content" id="compareExtracted"></div>
-                                            </div>
-                                            <div class="compare-panel compare-panel-markdown" id="panelMarkdown">
-                                                <div class="compare-panel-label" title="Klicken zum Ein/Ausblenden" style="cursor:pointer;" onclick="togglePanel('panelMarkdown')">
-                                                    <span>📝 Vorschau</span>
-                                                    <div class="compare-panel-toolbar" onclick="event.stopPropagation()">
-                                                        <button class="toolbar-btn active" data-view="split">Split</button>
-                                                        <button class="toolbar-btn" data-view="rendered">Vorschau</button>
-                                                        <button class="toolbar-btn" data-view="markdown">Source</button>
-                                                    </div>
-                                                    <span class="panel-toggle-icon">◀</span>
-                                                </div>
-                                                <div class="compare-panel-content">
-                                                    <div class="md-preview">
-                                                        <div class="md-source" id="mdSource"></div>
-                                                        <div class="md-rendered" id="mdRendered" style="display:none"></div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Pipeline Activity Log -->
-                    <section class="activity-log collapsed" id="activityLogPanel">
-                        <div class="panel-header" data-toggle="activityLogPanel" style="cursor: pointer;">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <span class="collapse-icon">▼</span>
-                                <h2>📊 Pipeline Aktivitäten</h2>
-                            </div>
-                        </div>
-                        <div class="panel-body">
-                            <div class="log-grid">
-                                <div class="log-column">
-                                    <h3>Marker Konvertierung</h3>
-                                    <div class="step-log" id="conversionLog"></div>
-                            </div>
-                                <div class="log-column">
-                                    <h3>KI-Bildanalyse</h3>
-                                    <div class="step-log" id="describeLog"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- Terminal Output (Moved here as requested) -->
-                    <section class="console-panel collapsed" id="consolePanel">
-                        <div class="panel-header" data-toggle="consolePanel" style="cursor: pointer;">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <span class="collapse-icon">▼</span>
-                                <h2>💻 System-Konsole</h2>
-                            </div>
-                        </div>
-                        <div class="panel-body">
-                            <button class="btn btn-text" id="btnClearConsole" style="margin-bottom: 8px;">Verlauf löschen</button>
-                            <div class="console-body" id="systemConsole"></div>
-                        </div>
-                    </section>
-                </section>
-            </main>
-        </div>
-    </div>
-
-    <div class="loading-overlay" id="loadingOverlay">
-        <div class="loading-spinner">
-            <div class="spinner"></div>
-            <p id="loadingText">Verarbeitung läuft...</p>
-        </div>
-    </div>
-    <div class="toast-container" id="toastContainer"></div>
-    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
-
-    <!-- Image Editor Modal -->
-    <div id="imageEditor" class="editor-modal" style="display:none;">
-        <button class="editor-close-x" id="editorCloseX" title="Schließen">✕</button>
-        <div class="editor-toolbar">
-            <div class="editor-toolbar-scroll">
-                <button class="tool-btn" id="toolCrop" title="Zuschneiden">✂️</button>
-                <button class="tool-btn" id="toolBrush" title="Pinsel">🖌️</button>
-                <button class="tool-btn" id="toolEyedropper" title="Pipette">🧪</button>
-                <input type="color" id="brushColor" value="#ff0000" title="Farbe wählen">
-                <input type="range" id="brushSize" min="1" max="50" value="10" title="Pinselgröße">
-                <span id="brushSizeVal" class="editor-size-val">10</span>
-                <button class="tool-btn" id="toolUndo" title="Rückgängig">↩️</button>
-                <button class="tool-btn" id="toolSwap" title="Bild tauschen">🔄</button>
-                <input type="file" id="swapFileInput" accept="image/*" style="display:none;">
-                <button class="tool-btn tool-danger" id="toolReset" title="Zurücksetzen">↩️</button>
-                <button class="tool-btn tool-primary" id="toolFinish" title="Speichern & KI-Neu">✅</button>
-                <button class="tool-btn tool-cancel" id="toolCancel" title="Schließen">✕</button>
-            </div>
-        </div>
-        <div class="editor-canvas-container" id="editorCanvasContainer">
-            <canvas id="editorCanvas"></canvas>
-            <div id="cropActionBar" class="crop-action-bar" style="display:none;">
-                <button class="crop-btn crop-btn-apply" id="cropApply">✓ Zuschneiden</button>
-                <button class="crop-btn crop-btn-cancel" id="cropCancel">✕ Abbrechen</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Shortcuts Modal -->
-    <div id="shortcutsModal" class="shortcuts-modal" style="display:none;">
-        <div class="shortcuts-content">
-            <div class="shortcuts-header">
-                <h3>⌨️ Tastenkombinationen</h3>
-                <button class="shortcuts-close" id="shortcutsClose">✕</button>
-            </div>
-            <div class="shortcuts-body">
-                <div class="shortcut-group">
-                    <h4>Bildanalyse</h4>
-                    <div class="shortcut-row"><kbd>Escape</kbd><span>Bildanalyse abbrechen</span></div>
-                </div>
-                <div class="shortcut-group">
-                    <h4>Vergleichsansicht</h4>
-                    <div class="shortcut-row"><kbd>←</kbd><span>Vorherige Seite</span></div>
-                    <div class="shortcut-row"><kbd>→</kbd><span>Nächste Seite</span></div>
-                    <div class="shortcut-row"><kbd>Escape</kbd><span>Zoom-Overlay schließen</span></div>
-                </div>
-                <div class="shortcut-group">
-                    <h4>Bild-Editor</h4>
-                    <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Z</kbd><span>Rückgängig</span></div>
-                    <div class="shortcut-row"><kbd>Escape</kbd><span>Editor schließen</span></div>
-                </div>
-                <div class="shortcut-group">
-                    <h4>Allgemein</h4>
-                    <div class="shortcut-row"><kbd>Escape</kbd><span>Fokus aus Eingabefeld entfernen</span></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script src="app.js"></script>
-</body>
-</html>
+     1|<!DOCTYPE html>
+     2|<html lang="de">
+     3|<head>
+     4|    <meta charset="UTF-8">
+     5|    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     6|    <title>PDF → Markdown Pipeline</title>
+     7|    <link rel="stylesheet" href="styles.css?v=20250426a">
+     8|    <script src="lib/jszip.min.js"></script>
+     9|    <script src="lib/crypto-js.min.js"></script>
+    10|    <script src="lib/marked.min.js"></script>
+    11|    <script src="lib/html-docx.js"></script>
+    12|    <script src="lib/FileSaver.min.js"></script>
+    13|    <script src="lib/fabric.min.js"></script>
+    14|    <script src="lib/pdf.min.js"></script>
+    15|    <script>
+    16|        if (typeof pdfjsLib !== 'undefined') {
+    17|            pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
+    18|        }
+    19|    </script>
+    20|    <link rel="icon" href="icon-512.png"/>
+    21|    <link rel="apple-touch-icon" href="icon-512.png"/>
+    22|    <link rel="manifest" href="manifest.json">
+    23|    <meta name="theme-color" content="#4f46e5">
+    24|</head>
+    25|<body>
+    26|    <div class="app">
+    27|        <header class="header">
+    28|            <div class="header-main">
+    29|                <button id="sidebarToggle" class="btn btn-icon sidebar-toggle-premium" title="Einstellungen umschalten" aria-label="Einstellungen umschalten">
+    30|                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    31|                        <line x1="4" y1="21" x2="4" y2="14"></line>
+    32|                        <line x1="4" y1="10" x2="4" y2="3"></line>
+    33|                        <line x1="12" y1="21" x2="12" y2="12"></line>
+    34|                        <line x1="12" y1="8" x2="12" y2="3"></line>
+    35|                        <line x1="20" y1="21" x2="20" y2="16"></line>
+    36|                        <line x1="20" y1="12" x2="20" y2="3"></line>
+    37|                        <line x1="1" y1="14" x2="7" y2="14"></line>
+    38|                        <line x1="9" y1="8" x2="15" y2="8"></line>
+    39|                        <line x1="17" y1="16" x2="23" y2="16"></line>
+    40|                    </svg>
+    41|                </button>
+    42|                <div class="logo" id="logoClick" title="Tastenkombinationen anzeigen" style="cursor: pointer;">
+    43|                    <img src="logo-ssilv.png" alt="Schloss-Schule Ilvesheim" style="height: 40px; width: auto;">
+    44|                </div>
+    45|                <div class="header-title">
+    46|                    <p class="subtitle">PDF zu E-Buch</p>
+    47|                    <span class="version-badge" id="versionBadge">v2.26</span>
+    48|                </div>
+    49|            </div>
+    50|        </header>
+    51|
+    52|        <div class="dashboard-grid">
+    53|            <!-- Left Column: Config -->
+    54|            <aside class="sidebar">
+    55|                <!-- 1. Basis-Einstellungen -->
+    56|                <section class="config-panel" id="configPanel">
+    57|                    <div class="panel-header" data-toggle="configPanel">
+    58|                        <div style="display: flex; align-items: center; gap: 8px;">
+    59|                            <button id="sidebarClose" class="btn-close-sidebar" title="Schließen" aria-label="Einstellungen schließen">✕</button>
+    60|                            <span class="collapse-icon">▼</span>
+    61|                            <h2>⚙️ Basis-Einstellungen</h2>
+    62|                        </div>
+    63|                    </div>
+    64|                    <div class="panel-body">
+    65|                        <div class="form-group">
+    66|                            <label for="imagePrompt">Bilderkennungs-Prompt</label>
+    67|                            <textarea id="imagePrompt" rows="10" placeholder="Prompt für die KI-Bildbeschreibung...">Describe illustrations comprehensively in German. Use the following internal structure:
+    68|
+    69|((Bild))
+    70|Art der Abbildung (z. B. Foto, Zeichnung, Diagramm):
+    71|Beschreibung: …  / Bildtext: …
+    72|((/Bild))
+    73|
+    74|* Place captions and titles above the ((Bild))((/Bild)) tag if they exist in the source.
+    75|* Use LaTeX for ALL mathematical expressions.
+    76|* If there is text in the image stick with the language it is written in and don't translate it.</textarea>
+    77|                        </div>
+    78|                        <div class="checkbox-group">
+    79|                            <label for="forceOcr">Force OCR</label>
+    80|                            <input type="checkbox" id="forceOcr">
+    81|                        </div>
+    82|                        <div class="checkbox-group">
+    83|                            <label for="paginateOutput">Paginate Output</label>
+    84|                            <input type="checkbox" id="paginateOutput">
+    85|                        </div>
+    86|                        <div id="pageNumberOptions" class="page-number-options" style="display:none; padding-left: 16px; border-left: 2px solid var(--border); margin-left: 4px;">
+    87|                            <div class="checkbox-group">
+    88|                                <label for="showPageNumbers">Seitenzahl in Doppelklammer anzeigen</label>
+    89|                                <input type="checkbox" id="showPageNumbers">
+    90|                            </div>
+    91|                            <div id="pageNumberInputs" style="display:none;">
+    92|                                <div class="form-group">
+    93|                                    <label for="pageNumberStart">Seitennummerierung ab Seite</label>
+    94|                                    <input type="number" id="pageNumberStart" value="1" min="1">
+    95|                                </div>
+    96|                                <div class="form-group">
+    97|                                    <label for="pageNumberInitial">Nummerierung starten mit</label>
+    98|                                    <input type="number" id="pageNumberInitial" value="1" min="0">
+    99|                                </div>
+   100|                            </div>
+   101|                        </div>
+   102|                        <div class="form-group">
+   103|                            <label for="outputFormat">Output Format</label>
+   104|                            <select id="outputFormat">
+   105|                                <option value="markdown">Markdown</option>
+   106|                                <option value="json">JSON</option>
+   107|                            </select>
+   108|                        </div>
+   109|                        <div class="form-group">
+   110|                            <label for="pageRange">Page Range</label>
+   111|                            <input type="text" id="pageRange" placeholder="z.B. 1-10,15">
+   112|                        </div>
+   113|                    </div>
+   114|                </section>
+   115|
+   116|                <!-- 2. Export-Formatierung -->
+   117|                <section class="config-panel" id="exportPanel">
+   118|                    <div class="panel-header" data-toggle="exportPanel">
+   119|                        <div style="display: flex; align-items: center; gap: 8px;">
+   120|                            <span class="collapse-icon">▼</span>
+   121|                            <h2>📝 Export-Formatierung</h2>
+   122|                        </div>
+   123|                    </div>
+   124|                    <div class="panel-body">
+   125|                        <div class="checkbox-grid">
+   126|                            <div class="checkbox-group">
+   127|                                <label for="docx-opt-unit-cm">Einheiten bereinigen</label>
+   128|                                <input type="checkbox" id="docx-opt-unit-cm" checked>
+   129|                            </div>
+   130|                            <div class="checkbox-group">
+   131|                                <label for="docx-opt-unit-circ">^circ zu °</label>
+   132|                                <input type="checkbox" id="docx-opt-unit-circ" checked>
+   133|                            </div>
+   134|                            <div class="checkbox-group">
+   135|                                <label for="docx-opt-latex-space-block">$$ Spaces</label>
+   136|                                <input type="checkbox" id="docx-opt-latex-space-block" checked>
+   137|                            </div>
+   138|                            <div class="checkbox-group">
+   139|                                <label for="docx-opt-latex-space-inline">$ Spaces</label>
+   140|                                <input type="checkbox" id="docx-opt-latex-space-inline" checked>
+   141|                            </div>
+   142|                            <div class="checkbox-group">
+   143|                                <label for="docx-opt-greek">Griechisch zu LaTeX</label>
+   144|                                <input type="checkbox" id="docx-opt-greek" checked>
+   145|                            </div>
+   146|                            <div class="checkbox-group">
+   147|                                <label for="docx-opt-supsub">Hoch/Tiefzahlen</label>
+   148|                                <input type="checkbox" id="docx-opt-supsub" checked>
+   149|                            </div>
+   150|                            <div class="checkbox-group">
+   151|                                <label for="docx-opt-nonascii">Sonderzeichen zu LaTeX</label>
+   152|                                <input type="checkbox" id="docx-opt-nonascii" checked>
+   153|                            </div>
+   154|                            <div class="checkbox-group">
+   155|                                <label for="docx-opt-nbsp-narrow">NBSP schmal</label>
+   156|                                <input type="checkbox" id="docx-opt-nbsp-narrow" checked>
+   157|                            </div>
+   158|                            <div class="checkbox-group">
+   159|                                <label for="docx-opt-quotes">Typogr. Anführungsz.</label>
+   160|                                <input type="checkbox" id="docx-opt-quotes" checked>
+   161|                            </div>
+   162|                            <div class="checkbox-group">
+   163|                                <label for="docx-opt-hyphens">Gedankenstriche</label>
+   164|                                <input type="checkbox" id="docx-opt-hyphens" checked>
+   165|                            </div>
+   166|                            <div class="checkbox-group">
+   167|                                <label for="docx-opt-whitespace">Unsichtbare Zeichen</label>
+   168|                                <input type="checkbox" id="docx-opt-whitespace" checked>
+   169|                            </div>
+   170|                            <div class="checkbox-group">
+   171|                                <label for="docx-opt-latex">LaTeX rendern (&lt;L&gt;)</label>
+   172|                                <input type="checkbox" id="docx-opt-latex" checked>
+   173|                            </div>
+   174|                            <div class="checkbox-group">
+   175|                                <label for="docx-opt-dollar">$ entfernen</label>
+   176|                                <input type="checkbox" id="docx-opt-dollar" checked>
+   177|                            </div>
+   178|                            <div class="checkbox-group">
+   179|                                <label for="docx-opt-cdot">\cdot zu *</label>
+   180|                                <input type="checkbox" id="docx-opt-cdot" checked>
+   181|                            </div>
+   182|                            <div class="checkbox-group">
+   183|                                <label for="docx-opt-images">Bilder-Tags</label>
+   184|                                <input type="checkbox" id="docx-opt-images" checked>
+   185|                            </div>
+   186|                            <div class="checkbox-group">
+   187|                                <label for="docx-opt-dashes">Trennlinien entfernen</label>
+   188|                                <input type="checkbox" id="docx-opt-dashes" checked>
+   189|                            </div>
+   190|                            <div class="checkbox-group">
+   191|                                <label for="docx-opt-pagebreak">Seitenumbruch</label>
+   192|                                <input type="checkbox" id="docx-opt-pagebreak">
+   193|                            </div>
+   194|                        </div>
+   195|                        <div style="display: flex; gap: 12px; margin-top: 12px;">
+   196|                            <div class="form-group" style="flex: 1;">
+   197|                                <label for="docxFontSize">Schriftgröße (pt)</label>
+   198|                                <select id="docxFontSize">
+   199|                                    <option value="10">10 pt</option>
+   200|                                    <option value="11">11 pt</option>
+   201|                                    <option value="12" selected>12 pt</option>
+   202|                                    <option value="14">14 pt</option>
+   203|                                </select>
+   204|                            </div>
+   205|                            <div class="form-group" style="flex: 1;">
+   206|                                <label for="docxLineSpacing">Zeilenabstand</label>
+   207|                                <select id="docxLineSpacing">
+   208|                                    <option value="1" selected>Standard (1.0)</option>
+   209|                                    <option value="1.15">Erweitert (1.15)</option>
+   210|                                    <option value="1.5">Groß (1.5)</option>
+   211|                                </select>
+   212|                            </div>
+   213|                        </div>
+   214|                    </div>
+   215|                </section>
+   216|
+   217|                <!-- 3. API-Einstellungen -->
+   218|                <section class="config-panel" id="apiPanel">
+   219|                    <div class="panel-header" data-toggle="apiPanel">
+   220|                        <div style="display: flex; align-items: center; gap: 8px;">
+   221|                            <span class="collapse-icon">▼</span>
+   222|                            <h2>🔌 API-Einstellungen</h2>
+   223|                        </div>
+   224|                    </div>
+   225|                    <div class="panel-body">
+   226|                        <div class="form-group">
+   227|                            <label for="apiToken">OpenWebUI API Token</label>
+   228|                            <input type="password" id="apiToken" value="" placeholder="sk-...">
+   229|                        </div>
+   230|                        <div class="form-group">
+   231|                            <label for="modelSelect">KI-Modell</label>
+   232|                            <select id="modelSelect">
+   233|                                <option value="">Lade Modelle...</option>
+   234|                            </select>
+   235|                        </div>
+   236|                        <div style="text-align: right; margin-top: -8px;">
+   237|                            <button class="btn btn-text" id="btnReloadModels" title="Modelle neu laden">🔄 Modelle neu laden</button>
+   238|                        </div>
+   239|                        <div class="form-group">
+   240|                            <label for="markerServerUrl">Marker Server URL</label>
+   241|                            <input type="text" id="markerServerUrl" value="./api/marker/upload" placeholder="./api/marker/upload">
+   242|                        </div>
+   243|                        <div class="form-group">
+   244|                            <label for="openwebuiUrl">OpenWebUI URL</label>
+   245|                            <input type="text" id="openwebuiUrl" value="https://openwebui.sbbz-ilvesheim.de/api" placeholder="https://openwebui.sbbz-ilvesheim.de/api">
+   246|                        </div>
+   247|                    </div>
+   248|                </section>
+   249|
+   250|                <!-- 4. Experimentelle-Einstellungen -->
+   251|                <section class="config-panel" id="expPanel">
+   252|                    <div class="panel-header" data-toggle="expPanel">
+   253|                        <div style="display: flex; align-items: center; gap: 8px;">
+   254|                            <span class="collapse-icon">▼</span>
+   255|                            <h2>🧪 Experimentelle-Einstellungen</h2>
+   256|                        </div>
+   257|                    </div>
+   258|                    <div class="panel-body">
+   259|                        <div class="checkbox-group">
+   260|                            <label for="useLlm">Use LLM</label>
+   261|                            <input type="checkbox" id="useLlm">
+   262|                        </div>
+   263|                        <div class="checkbox-group">
+   264|                            <label for="stripExistingOcr">Strip Existing OCR</label>
+   265|                            <input type="checkbox" id="stripExistingOcr">
+   266|                        </div>
+   267|                        <div class="checkbox-group">
+   268|                            <label for="redoInlineMath">Redo Inline Math</label>
+   269|                            <input type="checkbox" id="redoInlineMath">
+   270|                        </div>
+   271|                        <div class="checkbox-group">
+   272|                            <label for="disableImageExtraction">Disable Image Extraction</label>
+   273|                            <input type="checkbox" id="disableImageExtraction">
+   274|                        </div>
+   275|                    </div>
+   276|                </section>
+   277|            </aside>
+   278|
+   279|            <!-- Right Column: Pipeline & Results -->
+   280|            <main class="main-content">
+   281|                <section class="pipeline">
+   282|                    <div class="pipeline-title">
+   283|                        <h2>Pipeline Workflow</h2>
+   284|                        <div class="progress-summary">
+   285|                            <span id="progressText">Bereit</span>
+   286|                        </div>
+   287|                    </div>
+   288|
+   289|                    <div class="pipeline-steps">
+   290|                        <div class="pipeline-step active" data-step="1">
+   291|                            <div class="step-header">
+   292|                                <div class="step-number">1</div>
+   293|                                <div class="step-info">
+   294|                                    <h3 class="step-title">PDF Datei</h3>
+   295|                                </div>
+   296|                            </div>
+   297|                            <div class="step-body">
+   298|                                <div class="drop-zone" id="dropZone">
+   299|                                    <p class="drop-text">PDF oder Bild hier ablegen oder <span class="browse-link">wählen</span></p>
+   300|                                    <input type="file" id="pdfInput" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif" style="display:none">
+   301|                                </div>
+   302|                                <div class="file-info" id="fileInfo" style="display:none">
+   303|                                    <div class="file-icon">📄</div>
+   304|                                    <div class="file-details">
+   305|                                        <span class="file-name" id="fileName"></span>
+   306|                                        <span class="file-size" id="fileSize"></span>
+   307|                                    </div>
+   308|                                    <button class="btn-remove" id="removeFile" aria-label="Datei entfernen">✕</button>
+   309|                                </div>
+   310|                                <div class="action-bar" style="display: flex; gap: 12px; margin-top: 12px;">
+   311|                                    <button class="btn btn-primary btn-start" id="btnStart" style="flex: 1; height: 50px; font-size: 1.1rem;">
+   312|                                        🚀 Pipeline starten
+   313|                                    </button>
+   314|                                    <button class="btn btn-secondary" id="btnReset" style="width: 50px; height: 50px; padding: 0;" title="Pipeline zurücksetzen" aria-label="Pipeline zurücksetzen">
+   315|                                        🔄
+   316|                                    </button>
+   317|                                </div>
+   318|                                
+   319|                                <!-- PDF Preview -->
+   320|                                <div id="pdfPreview" class="pdf-preview" style="display:none;">
+   321|                                    <div class="pdf-preview-header">
+   322|                                        <h4>📄 PDF-Vorschau</h4>
+   323|                                        <span class="pdf-preview-count" id="pdfPreviewCount"></span>
+   324|                                    </div>
+   325|                                    <div class="pdf-grid" id="pdfGrid"></div>
+   326|                                    <div class="pdf-preview-more" id="pdfPreviewMore" style="display:none;">
+   327|                                        <span id="pdfPreviewMoreText">… und weitere Seiten</span>
+   328|                                        <button class="btn btn-text" id="btnLoadAllPdf" style="margin-left: 8px;">Alle laden</button>
+   329|                                    </div>
+   330|                                </div>
+   331|                            </div>
+   332|                        </div>
+   333|
+   334|                        <div class="pipeline-step" data-step="4">
+   335|                            <div class="step-header">
+   336|                                <div class="step-number">2</div>
+   337|                                <div class="step-info">
+   338|                                    <h3 class="step-title">Ergebnisse & Export</h3>
+   339|                                </div>
+   340|                            </div>
+   341|                            <div class="step-body">
+   342|                                <div class="pipeline-stats-compact" id="conversionStats" style="display: none;">
+   343|                                    <span class="stat-item"><strong>Zeichen:</strong> <span id="statChars">0</span></span>
+   344|                                    <span class="stat-divider">|</span>
+   345|                                    <span class="stat-item"><strong>Bilder:</strong> <span id="statImages">0</span></span>
+   346|                                    <span class="stat-divider" id="uploadDivider" style="display:none;">|</span>
+   347|                                    <span class="stat-item" id="uploadSummary" style="display:none;"><strong>Archiv:</strong> <span id="zipStatus">Wartend</span></span>
+   348|                                </div>
+   349|
+   350|                                <div class="markdown-actions">
+   351|                                    <button class="btn btn-secondary" id="btnDownloadDocx">📘 Word-Datei (.docx)</button>
+   352|                                    <button class="btn btn-secondary" id="btnDownloadMd">📄 Markdown laden</button>
+   353|                                    <button class="btn btn-secondary" id="btnDownloadZip" style="display: none;">📦 Archiv (ZIP)</button>
+   354|                                    <button class="btn btn-secondary" id="btnCopyMd">📋 Kopieren</button>
+   355|                                </div>
+   356|                                
+   357|                                <div id="describeProgress" class="progress-container" style="display:none;">
+   358|                                    <div class="progress-bar-wrapper">
+   359|                                        <div id="progressFill" class="progress-fill"></div>
+   360|                                    </div>
+   361|                                    <span id="progressLabel" class="progress-label">0 / 0 Bilder</span>
+   362|                                </div>
+   363|                                
+   364|                                <div class="results-layout-wrapper">
+   365|                                    <!-- Comparison View -->
+   366|                                    <div id="compareView" class="compare-view" style="display:none;">
+   367|                                        <div class="compare-header">
+   368|                                            <div class="compare-nav">
+   369|                                                <button class="btn btn-secondary" id="comparePrev">◀ Vorherige</button>
+   370|                                                <span class="compare-page-info" id="comparePageInfo">Seite 0 von 0</span>
+   371|                                                <button class="btn btn-secondary" id="compareNext">Nächste ▶</button>
+   372|                                            </div>
+   373|
+   374|                                        </div>
+   375|                                        <div class="compare-layout">
+   376|                                            <div class="compare-panel compare-panel-original" id="panelOriginal">
+   377|                                                <div class="compare-panel-label" title="Klicken zum Ein/Ausblenden" style="cursor:pointer;" onclick="togglePanel('panelOriginal')">
+   378|                                                    <span>📄 Original PDF</span>
+   379|                                                    <span class="panel-toggle-icon">◀</span>
+   380|                                                </div>
+   381|                                                <div class="compare-panel-content" id="compareOriginal"></div>
+   382|                                            </div>
+   383|                                            <div class="compare-panel compare-panel-extracted" id="panelExtracted">
+   384|                                                <div class="compare-panel-label" title="Klicken zum Ein/Ausblenden" style="cursor:pointer;" onclick="togglePanel('panelExtracted')">
+   385|                                                    <span>🎯 Erkannte Bilder</span>
+   386|                                                    <span class="compare-badge" id="compareBadge">0</span>
+   387|                                                    <span class="panel-toggle-icon">◀</span>
+   388|                                                </div>
+   389|                                                <div class="compare-panel-content" id="compareExtracted"></div>
+   390|                                            </div>
+   391|                                            <div class="compare-panel compare-panel-markdown" id="panelMarkdown">
+   392|                                                <div class="compare-panel-label" title="Klicken zum Ein/Ausblenden" style="cursor:pointer;" onclick="togglePanel('panelMarkdown')">
+   393|                                                    <span>📝 Vorschau</span>
+   394|                                                    <div class="compare-panel-toolbar" onclick="event.stopPropagation()">
+   395|                                                        <button class="toolbar-btn active" data-view="split">Split</button>
+   396|                                                        <button class="toolbar-btn" data-view="rendered">Vorschau</button>
+   397|                                                        <button class="toolbar-btn" data-view="markdown">Source</button>
+   398|                                                    </div>
+   399|                                                    <span class="panel-toggle-icon">◀</span>
+   400|                                                </div>
+   401|                                                <div class="compare-panel-content">
+   402|                                                    <div class="md-preview">
+   403|                                                        <div class="md-source" id="mdSource"></div>
+   404|                                                        <div class="md-rendered" id="mdRendered" style="display:none"></div>
+   405|                                                    </div>
+   406|                                                </div>
+   407|                                            </div>
+   408|                                        </div>
+   409|                                    </div>
+   410|                                </div>
+   411|                            </div>
+   412|                        </div>
+   413|                    </div>
+   414|
+   415|                    <!-- Pipeline Activity Log -->
+   416|                    <section class="activity-log collapsed" id="activityLogPanel">
+   417|                        <div class="panel-header" data-toggle="activityLogPanel" style="cursor: pointer;">
+   418|                            <div style="display: flex; align-items: center; gap: 8px;">
+   419|                                <span class="collapse-icon">▼</span>
+   420|                                <h2>📊 Pipeline Aktivitäten</h2>
+   421|                            </div>
+   422|                        </div>
+   423|                        <div class="panel-body">
+   424|                            <div class="log-grid">
+   425|                                <div class="log-column">
+   426|                                    <h3>Marker Konvertierung</h3>
+   427|                                    <div class="step-log" id="conversionLog"></div>
+   428|                            </div>
+   429|                                <div class="log-column">
+   430|                                    <h3>KI-Bildanalyse</h3>
+   431|                                    <div class="step-log" id="describeLog"></div>
+   432|                                </div>
+   433|                            </div>
+   434|                        </div>
+   435|                    </section>
+   436|
+   437|                    <!-- Terminal Output (Moved here as requested) -->
+   438|                    <section class="console-panel collapsed" id="consolePanel">
+   439|                        <div class="panel-header" data-toggle="consolePanel" style="cursor: pointer;">
+   440|                            <div style="display: flex; align-items: center; gap: 8px;">
+   441|                                <span class="collapse-icon">▼</span>
+   442|                                <h2>💻 System-Konsole</h2>
+   443|                            </div>
+   444|                        </div>
+   445|                        <div class="panel-body">
+   446|                            <button class="btn btn-text" id="btnClearConsole" style="margin-bottom: 8px;">Verlauf löschen</button>
+   447|                            <div class="console-body" id="systemConsole"></div>
+   448|                        </div>
+   449|                    </section>
+   450|                </section>
+   451|            </main>
+   452|        </div>
+   453|    </div>
+   454|
+   455|    <div class="loading-overlay" id="loadingOverlay">
+   456|        <div class="loading-spinner">
+   457|            <div class="spinner"></div>
+   458|            <p id="loadingText">Verarbeitung läuft...</p>
+   459|        </div>
+   460|    </div>
+   461|    <div class="toast-container" id="toastContainer"></div>
+   462|    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+   463|
+   464|    <!-- Image Editor Modal -->
+   465|    <div id="imageEditor" class="editor-modal" style="display:none;">
+   466|        <button class="editor-close-x" id="editorCloseX" title="Schließen">✕</button>
+   467|        <div class="editor-toolbar">
+   468|            <div class="editor-toolbar-scroll">
+   469|                <button class="tool-btn" id="toolCrop" title="Zuschneiden">✂️</button>
+   470|                <button class="tool-btn" id="toolBrush" title="Pinsel">🖌️</button>
+   471|                <button class="tool-btn" id="toolEyedropper" title="Pipette">🧪</button>
+   472|                <input type="color" id="brushColor" value="#ff0000" title="Farbe wählen">
+   473|                <input type="range" id="brushSize" min="1" max="50" value="10" title="Pinselgröße">
+   474|                <span id="brushSizeVal" class="editor-size-val">10</span>
+   475|                <button class="tool-btn" id="toolUndo" title="Rückgängig">↩️</button>
+   476|                <button class="tool-btn" id="toolSwap" title="Bild tauschen">🔄</button>
+   477|                <input type="file" id="swapFileInput" accept="image/*" style="display:none;">
+   478|                <button class="tool-btn tool-danger" id="toolReset" title="Zurücksetzen">↩️</button>
+   479|                <button class="tool-btn tool-primary" id="toolFinish" title="Speichern & KI-Neu">✅</button>
+   480|                <button class="tool-btn tool-cancel" id="toolCancel" title="Schließen">✕</button>
+   481|            </div>
+   482|        </div>
+   483|        <div class="editor-canvas-container" id="editorCanvasContainer">
+   484|            <canvas id="editorCanvas"></canvas>
+   485|            <div id="cropActionBar" class="crop-action-bar" style="display:none;">
+   486|                <button class="crop-btn crop-btn-apply" id="cropApply">✓ Zuschneiden</button>
+   487|                <button class="crop-btn crop-btn-cancel" id="cropCancel">✕ Abbrechen</button>
+   488|            </div>
+   489|        </div>
+   490|    </div>
+   491|
+   492|    <!-- Shortcuts Modal -->
+   493|    <div id="shortcutsModal" class="shortcuts-modal" style="display:none;">
+   494|        <div class="shortcuts-content">
+   495|            <div class="shortcuts-header">
+   496|                <h3>⌨️ Tastenkombinationen</h3>
+   497|                <button class="shortcuts-close" id="shortcutsClose">✕</button>
+   498|            </div>
+   499|            <div class="shortcuts-body">
+   500|                <div class="shortcut-group">
+   501|
