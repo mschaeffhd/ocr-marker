@@ -394,16 +394,6 @@ body {
     gap: 2px;
 }
 
-.form-row {
-    display: flex;
-    gap: 12px;
-}
-
-.form-row .form-group.half {
-    flex: 1;
-    min-width: 0;
-}
-
 .form-group label {
     font-size: 0.75rem;
     font-weight: 600;

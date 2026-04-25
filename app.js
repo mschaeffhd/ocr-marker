@@ -389,36 +389,58 @@ function insertPageNumbers(md) {
     const startPage = parseInt($('#pageNumberStart')?.value || '1', 10);
     const initialNum = parseInt($('#pageNumberInitial')?.value || '1', 10);
     
-    // Split by horizontal rule (page breaks from paginate_output)
-    // Match --- surrounded by newlines or at start/end
-    const pages = md.split(/\n---\n/);
-    if (pages.length <= 1) return md; // No page breaks found
+    // Robust split: match horizontal rules with various newline patterns
+    // Marker may output --- with different surrounding whitespace
+    // Patterns: \n---\n, \n\n---\n\n, ^---\n, \n---$
+    const pages = md.split(/\n*\n---\n*\n?/);
+    if (pages.length <= 1) {
+        console.log('[PageNumbers] No page breaks found, single page');
+        // Even single page gets a number if it has content
+        const trimmed = md.replace(/^\n+/, '');
+        if (trimmed.length > 0) {
+            return '((1))\n' + trimmed;
+        }
+        return md;
+    }
+    
+    console.log(`[PageNumbers] Found ${pages.length} pages, start=${startPage}, initial=${initialNum}`);
     
     const result = [];
     let currentNum = initialNum;
     
     pages.forEach((page, index) => {
-        const pageNum = index + 1; // 1-based page index
+        const pageNum = index + 1;
         let prefix;
         if (pageNum < startPage) {
-            prefix = '(( ))'; // Not numbered yet
+            prefix = '(( ))';
         } else {
             prefix = `((${currentNum}))`;
             currentNum++;
         }
         
-        // Add prefix at the beginning of the page content
-        // Trim leading whitespace from page, add prefix, then content
         const trimmed = page.replace(/^\n+/, '');
-        result.push(prefix + '\n' + trimmed);
+        if (trimmed.length > 0 || pages.length === 1) {
+            result.push(prefix + '\n' + trimmed);
+        } else {
+            result.push(prefix);
+        }
     });
     
-    return result.join('\n---\n');
+    const output = result.join('\n---\n');
+    console.log('[PageNumbers] Output preview:', output.substring(0, 200));
+    return output;
 }
 
 function renderMarkdown(md) {
     // Insert page numbers before rendering
-    md = insertPageNumbers(md);
+    const mdWithNumbers = insertPageNumbers(md);
+    
+    // Update the raw text source to show page numbers too
+    const mdSource = $('#mdSource');
+    if (mdSource) mdSource.textContent = mdWithNumbers;
+    
+    // Use the numbered version for rendering
+    md = mdWithNumbers;
     
     // Reset page offsets
     mdPageOffsets = {};
@@ -1148,7 +1170,8 @@ on('#btnReset', 'click', () => {
 
 // Copy markdown
 on('#btnCopyMd', 'click', () => {
-    navigator.clipboard.writeText(state.markdown).then(() => {
+    const mdWithNumbers = insertPageNumbers(state.markdown);
+    navigator.clipboard.writeText(mdWithNumbers).then(() => {
         showToast('Markdown in Zwischenablage kopiert!', 'success');
     }).catch(() => {
         showToast('Kopieren fehlgeschlagen', 'error');
@@ -1158,7 +1181,8 @@ on('#btnCopyMd', 'click', () => {
 // Download markdown
 on('#btnDownloadMd', 'click', () => {
     const bookName = state.bookName || 'export';
-    const blob = new Blob([state.markdown], { type: 'text/markdown' });
+    const mdWithNumbers = insertPageNumbers(state.markdown);
+    const blob = new Blob([mdWithNumbers], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -1197,8 +1221,11 @@ async function exportToDocx() {
     debugLog(`Starte DOCX-Export für ${bookName}...`, 'info');
     
     try {
+        // Insert page numbers before cleaning/export
+        let md = insertPageNumbers(state.markdown);
+        
         // Apply MBZ cleaning filters
-        let md = getCleanedMarkdown(state.markdown);
+        md = getCleanedMarkdown(md);
         
         // 2. Markdown zu HTML
         marked.setOptions({
