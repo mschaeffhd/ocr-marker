@@ -390,22 +390,33 @@ function insertPageNumbers(md) {
     const initialNum = parseInt($('#pageNumberInitial')?.value || '1', 10) || 0;
     
     // Detect page break separator used by marker
-    // Marker with paginate_output uses \f (form feed, ASCII 12)
-    // Some outputs may use --- (horizontal rule)
+    // Marker with paginate_output may output:
+    //   - literal backslash-f: \f  (two chars: \ and f)
+    //   - actual form feed: \x0C  (ASCII 12)
+    //   - or horizontal rule: ---
     let pages = [];
     let separator = '\n';
     
-    if (md.includes('\f')) {
-        // Form feed is the marker paginate_output separator
-        pages = md.split(/\f+/);
-        separator = '\f';
-        console.log(`[PageNumbers] Split on FORM FEED (\\f), found ${pages.length} pages`);
-    } else if (md.includes('\n---\n')) {
+    // Check for literal \f (backslash + f) - most common in marker output
+    if (md.includes('\\f')) {
+        pages = md.split(/\\f+/);
+        separator = '\\f';
+        console.log(`[PageNumbers] Split on literal \\f, found ${pages.length} pages`);
+    }
+    // Check for actual form feed character (ASCII 12)
+    else if (md.includes('\x0C')) {
+        pages = md.split(/\x0C+/);
+        separator = '\x0C';
+        console.log(`[PageNumbers] Split on form feed char, found ${pages.length} pages`);
+    }
+    // Fallback: horizontal rule
+    else if (md.includes('\n---\n')) {
         pages = md.split('\n---\n');
         separator = '\n---\n';
         console.log(`[PageNumbers] Split on horizontal rule (---), found ${pages.length} pages`);
-    } else {
-        // No page breaks found - treat as single page
+    }
+    // No page breaks found
+    else {
         pages = [md];
         console.log('[PageNumbers] No page breaks found, treating as single page');
     }
