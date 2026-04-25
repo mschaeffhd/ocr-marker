@@ -13,6 +13,12 @@ Art der Abbildung (z. B. Foto, Zeichnung, Diagramm):<br/>
 Beschreibung: …  / Bildtext: …<br/>
 ((/Bild))
 
+example:
+((Bild))<br/>
+Diagramm:<br/>
+Eine farbenfrohe Illustration eines Party-Poppers, der buntes Konfetti und kleine Girlanden ausstößt, begleitet von dem Text „Purchase Completed!“<br/>
+((/Bild))
+
 * Place captions and titles above the ((Bild))((/Bild)) tag if they exist in the source.
 * Use LaTeX for ALL mathematical expressions.
 * If there is text in the image stick with the language it is written in and don't translate it.`;
