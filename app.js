@@ -5,6 +5,18 @@ const CONFIG = {
     model: 'alleskoenner-schnell-qwen36-35b-a3b',
 };
 
+// Default prompt for image recognition
+const DEFAULT_IMAGE_PROMPT = `Describe illustrations comprehensively in German. Use the following internal structure:
+
+((Bild))<br/>
+Art der Abbildung (z. B. Foto, Zeichnung, Diagramm):<br/>
+Beschreibung: …  / Bildtext: …<br/>
+((/Bild))
+
+* Place captions and titles above the ((Bild))((/Bild)) tag if they exist in the source.
+* Use LaTeX for ALL mathematical expressions.
+* If there is text in the image stick with the language it is written in and don't translate it.`;
+
 // Encryption Key (Simple default as requested)
 const SECRET_KEY = 'marker-pipeline-secret-key-123';
 
@@ -281,6 +293,10 @@ async function describeImages() {
         
         try {
             debugLog(`Anfrage Bildbeschreibung für ${fname}...`, 'debug');
+            // Get custom prompt or use default
+            const customPrompt = $('#imagePrompt')?.value?.trim();
+            const promptText = customPrompt || DEFAULT_IMAGE_PROMPT;
+            
             const payload = {
                 model: CONFIG.model,
                 stream: false,
@@ -290,7 +306,7 @@ async function describeImages() {
                         content: [
                             {
                                 type: 'text',
-                                text: 'Beschreibe dieses Bild aus einem Lehrbuch in einem kurzen, präzisen Satz auf Deutsch. Nur die Beschreibung, kein weiterer Text.'
+                                text: promptText
                             },
                             {
                                 type: 'image_url',
@@ -1415,6 +1431,7 @@ function saveConfig() {
         openwebuiUrl: $('#openwebuiUrl')?.value || '',
         apiToken: $('#apiToken')?.value || '',
         model: $('#modelSelect')?.value || '',
+        imagePrompt: $('#imagePrompt')?.value || '',
         forceOcr: $('#forceOcr')?.checked || false,
         outputFormat: $('#outputFormat')?.value || 'markdown',
         pageRange: $('#pageRange')?.value || '',
@@ -1487,6 +1504,7 @@ function loadConfig() {
             if ($('#openwebuiUrl')) $('#openwebuiUrl').value = config.openwebuiUrl || CONFIG.openwebuiUrl;
             if ($('#apiToken')) $('#apiToken').value = config.apiToken || '';
             if ($('#modelSelect')) $('#modelSelect').value = config.model || '';
+            if ($('#imagePrompt')) $('#imagePrompt').value = config.imagePrompt || DEFAULT_IMAGE_PROMPT;
             if ($('#forceOcr')) $('#forceOcr').checked = config.forceOcr || false;
             if ($('#outputFormat')) $('#outputFormat').value = config.outputFormat || 'markdown';
             if ($('#pageRange')) $('#pageRange').value = config.pageRange || '';
@@ -1544,6 +1562,7 @@ function loadConfig() {
         }
         if ($('#markerServerUrl') && $('#markerServerUrl').value === '') $('#markerServerUrl').value = CONFIG.markerServerUrl;
         if ($('#openwebuiUrl') && $('#openwebuiUrl').value === '') $('#openwebuiUrl').value = CONFIG.openwebuiUrl;
+        if ($('#imagePrompt') && $('#imagePrompt').value === '') $('#imagePrompt').value = DEFAULT_IMAGE_PROMPT;
     }
 
     // Auto-trigger model loading on startup if URL is present
@@ -1555,7 +1574,7 @@ function loadConfig() {
 }
 
 // Auto-save on input change
-$$('input, select').forEach(el => {
+$$('input, select, textarea').forEach(el => {
     el.addEventListener('input', saveConfig);
     el.addEventListener('change', saveConfig);
 });

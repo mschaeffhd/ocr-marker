@@ -73,6 +73,19 @@
                             <button class="btn btn-text" id="btnReloadModels" title="Modelle neu laden">🔄 Modelle neu laden</button>
                         </div>
                         <div class="form-group">
+                            <label for="imagePrompt">Bilderkennungs-Prompt</label>
+                            <textarea id="imagePrompt" rows="10" placeholder="Prompt für die KI-Bildbeschreibung...">Describe illustrations comprehensively in German. Use the following internal structure:
+
+((Bild))
+Art der Abbildung (z. B. Foto, Zeichnung, Diagramm):
+Beschreibung: …  / Bildtext: …
+((/Bild))
+
+* Place captions and titles above the ((Bild))((/Bild)) tag if they exist in the source.
+* Use LaTeX for ALL mathematical expressions.
+* If there is text in the image stick with the language it is written in and don't translate it.</textarea>
+                        </div>
+                        <div class="form-group">
                             <label for="markerServerUrl">Marker Server URL</label>
                             <input type="text" id="markerServerUrl" value="./api/marker/upload" placeholder="./api/marker/upload">
                         </div>
