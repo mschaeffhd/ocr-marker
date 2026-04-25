@@ -382,7 +382,44 @@ function updateMarkdownWithCaptions() {
     addLog('mdLog', 'Markdown mit Bildbeschreibungen aktualisiert', 'success');
 }
 
+function insertPageNumbers(md) {
+    const showNums = $('#showPageNumbers')?.checked ?? true;
+    if (!showNums) return md;
+    
+    const startPage = parseInt($('#pageNumberStart')?.value || '1', 10);
+    const initialNum = parseInt($('#pageNumberInitial')?.value || '1', 10);
+    
+    // Split by horizontal rule (page breaks from paginate_output)
+    // Match --- surrounded by newlines or at start/end
+    const pages = md.split(/\n---\n/);
+    if (pages.length <= 1) return md; // No page breaks found
+    
+    const result = [];
+    let currentNum = initialNum;
+    
+    pages.forEach((page, index) => {
+        const pageNum = index + 1; // 1-based page index
+        let prefix;
+        if (pageNum < startPage) {
+            prefix = '(( ))'; // Not numbered yet
+        } else {
+            prefix = `((${currentNum}))`;
+            currentNum++;
+        }
+        
+        // Add prefix at the beginning of the page content
+        // Trim leading whitespace from page, add prefix, then content
+        const trimmed = page.replace(/^\n+/, '');
+        result.push(prefix + '\n' + trimmed);
+    });
+    
+    return result.join('\n---\n');
+}
+
 function renderMarkdown(md) {
+    // Insert page numbers before rendering
+    md = insertPageNumbers(md);
+    
     // Reset page offsets
     mdPageOffsets = {};
     
@@ -1271,6 +1308,10 @@ function saveConfig() {
         outputFormat: $('#outputFormat')?.value || 'markdown',
         pageRange: $('#pageRange')?.value || '',
         paginateOutput: $('#paginateOutput')?.checked || false,
+        // Seitenzahlen Optionen
+        showPageNumbers: $('#showPageNumbers')?.checked ?? true,
+        pageNumberStart: $('#pageNumberStart')?.value || '1',
+        pageNumberInitial: $('#pageNumberInitial')?.value || '1',
         // Experimentelle Optionen
         useLlm: $('#useLlm')?.checked || false,
         stripExistingOcr: $('#stripExistingOcr')?.checked || false,
@@ -1339,6 +1380,10 @@ function loadConfig() {
             if ($('#outputFormat')) $('#outputFormat').value = config.outputFormat || 'markdown';
             if ($('#pageRange')) $('#pageRange').value = config.pageRange || '';
             if ($('#paginateOutput')) $('#paginateOutput').checked = config.paginateOutput || false;
+            // Seitenzahlen Optionen
+            if ($('#showPageNumbers')) $('#showPageNumbers').checked = config.showPageNumbers !== undefined ? config.showPageNumbers : true;
+            if ($('#pageNumberStart')) $('#pageNumberStart').value = config.pageNumberStart || '1';
+            if ($('#pageNumberInitial')) $('#pageNumberInitial').value = config.pageNumberInitial || '1';
             // Experimentelle Optionen
             if ($('#useLlm')) $('#useLlm').checked = config.useLlm || false;
             if ($('#stripExistingOcr')) $('#stripExistingOcr').checked = config.stripExistingOcr || false;
@@ -2057,12 +2102,26 @@ autoSaveFields.forEach(sel => {
 
 const autoSaveChecks = [
     '#forceOcr', '#paginateOutput', '#useLlm', '#stripExistingOcr',
-    '#redoInlineMath', '#disableImageExtraction'
+    '#redoInlineMath', '#disableImageExtraction', '#showPageNumbers'
 ];
 autoSaveChecks.forEach(sel => {
     on(sel, 'change', () => {
         if (typeof saveConfig === 'function') saveConfig();
+        // Re-render markdown when page number settings change
+        if (sel === '#showPageNumbers' && state.markdown) {
+            renderMarkdown(state.markdown);
+        }
     });
+});
+
+// Auto-save page number inputs and re-render
+on('#pageNumberStart', 'change', () => {
+    if (typeof saveConfig === 'function') saveConfig();
+    if (state.markdown) renderMarkdown(state.markdown);
+});
+on('#pageNumberInitial', 'change', () => {
+    if (typeof saveConfig === 'function') saveConfig();
+    if (state.markdown) renderMarkdown(state.markdown);
 });
 
 // ===== Comparison View Functions =====
