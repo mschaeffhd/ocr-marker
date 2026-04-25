@@ -2842,4 +2842,39 @@ initShortcuts();
 // Export for HTML onclick calls
 window.togglePanel = togglePanel;
 
+// ===== Shortcuts Modal =====
+function openShortcutsModal() {
+    const modal = $('#shortcutsModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeShortcutsModal() {
+    const modal = $('#shortcutsModal');
+    if (modal) modal.style.display = 'none';
+}
+
+on('#logoClick', 'click', () => {
+    openShortcutsModal();
+});
+
+on('#shortcutsClose', 'click', () => {
+    closeShortcutsModal();
+});
+
+// Close shortcuts modal on backdrop click or Escape
+$('#shortcutsModal')?.addEventListener('click', (e) => {
+    if (e.target === $('#shortcutsModal')) {
+        closeShortcutsModal();
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const modal = $('#shortcutsModal');
+        if (modal && modal.style.display === 'flex') {
+            closeShortcutsModal();
+        }
+    }
+});
+
 console.log('PDF Pipeline Frontend loaded! 🚀');

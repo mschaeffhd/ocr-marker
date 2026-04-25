@@ -39,10 +39,13 @@
                         <line x1="17" y1="16" x2="23" y2="16"></line>
                     </svg>
                 </button>
-                <div class="logo">
+                <div class="logo" id="logoClick" title="Tastenkombinationen anzeigen" style="cursor: pointer;">
                     <img src="logo-ssilv.png" alt="Schloss-Schule Ilvesheim" style="height: 40px; width: auto;">
                 </div>
-                <p class="subtitle">PDF zu E-E-Buch</p>
+                <div class="header-title">
+                    <p class="subtitle">PDF zu E-Buch</p>
+                    <span class="version-badge" id="versionBadge">v2.26</span>
+                </div>
             </div>
         </header>
 
@@ -482,6 +485,37 @@ Beschreibung: …  / Bildtext: …
             <div id="cropActionBar" class="crop-action-bar" style="display:none;">
                 <button class="crop-btn crop-btn-apply" id="cropApply">✓ Zuschneiden</button>
                 <button class="crop-btn crop-btn-cancel" id="cropCancel">✕ Abbrechen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shortcuts Modal -->
+    <div id="shortcutsModal" class="shortcuts-modal" style="display:none;">
+        <div class="shortcuts-content">
+            <div class="shortcuts-header">
+                <h3>⌨️ Tastenkombinationen</h3>
+                <button class="shortcuts-close" id="shortcutsClose">✕</button>
+            </div>
+            <div class="shortcuts-body">
+                <div class="shortcut-group">
+                    <h4>Bildanalyse</h4>
+                    <div class="shortcut-row"><kbd>Escape</kbd><span>Bildanalyse abbrechen</span></div>
+                </div>
+                <div class="shortcut-group">
+                    <h4>Vergleichsansicht</h4>
+                    <div class="shortcut-row"><kbd>←</kbd><span>Vorherige Seite</span></div>
+                    <div class="shortcut-row"><kbd>→</kbd><span>Nächste Seite</span></div>
+                    <div class="shortcut-row"><kbd>Escape</kbd><span>Zoom-Overlay schließen</span></div>
+                </div>
+                <div class="shortcut-group">
+                    <h4>Bild-Editor</h4>
+                    <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Z</kbd><span>Rückgängig</span></div>
+                    <div class="shortcut-row"><kbd>Escape</kbd><span>Editor schließen</span></div>
+                </div>
+                <div class="shortcut-group">
+                    <h4>Allgemein</h4>
+                    <div class="shortcut-row"><kbd>Escape</kbd><span>Fokus aus Eingabefeld entfernen</span></div>
+                </div>
             </div>
         </div>
     </div>
