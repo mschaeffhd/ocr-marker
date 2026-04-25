@@ -624,8 +624,10 @@ async function createZipArchive() {
     
     addLog('uploadLog', 'Erstelle ZIP-Archiv...', 'info');
     
-    // Add Markdown
-    zip.file(`${bookName}.md`, state.markdown);
+    // Add output file (Markdown or JSON)
+    const outputFormat = $('#outputFormat')?.value || 'markdown';
+    const ext = outputFormat === 'json' ? 'json' : 'md';
+    zip.file(`${bookName}.${ext}`, state.markdown);
     
     // Add images
     let imageCount = 0;
@@ -1315,29 +1317,55 @@ on('#btnReset', 'click', () => {
     }
 });
 
-// Copy markdown
+// Copy markdown / json
 on('#btnCopyMd', 'click', () => {
-    const mdWithNumbers = insertPageNumbers(state.markdown);
-    navigator.clipboard.writeText(mdWithNumbers).then(() => {
-        showToast('Markdown in Zwischenablage kopiert!', 'success');
+    const outputFormat = $('#outputFormat')?.value || 'markdown';
+    const isJson = outputFormat === 'json';
+    const content = insertPageNumbers(state.markdown);
+    navigator.clipboard.writeText(content).then(() => {
+        showToast(isJson ? 'JSON in Zwischenablage kopiert!' : 'Markdown in Zwischenablage kopiert!', 'success');
     }).catch(() => {
         showToast('Kopieren fehlgeschlagen', 'error');
     });
 });
 
-// Download markdown
+// Update download buttons based on output format
+function updateDownloadButtons() {
+    const outputFormat = $('#outputFormat')?.value || 'markdown';
+    const isJson = outputFormat === 'json';
+    
+    const btnMd = $('#btnDownloadMd');
+    const btnDocx = $('#btnDownloadDocx');
+    const btnCopy = $('#btnCopyMd');
+    
+    if (btnMd) {
+        btnMd.textContent = isJson ? '📄 JSON laden' : '📄 Markdown laden';
+    }
+    if (btnDocx) {
+        btnDocx.style.display = isJson ? 'none' : '';
+    }
+    if (btnCopy) {
+        btnCopy.textContent = isJson ? '📋 JSON kopieren' : '📋 Kopieren';
+    }
+}
+
+// Download markdown / json
 on('#btnDownloadMd', 'click', () => {
     const bookName = state.bookName || 'export';
-    const mdWithNumbers = insertPageNumbers(state.markdown);
-    const blob = new Blob([mdWithNumbers], { type: 'text/markdown' });
+    const outputFormat = $('#outputFormat')?.value || 'markdown';
+    const isJson = outputFormat === 'json';
+    const content = insertPageNumbers(state.markdown);
+    const mimeType = isJson ? 'application/json' : 'text/markdown';
+    const ext = isJson ? 'json' : 'md';
+    const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${bookName}.md`;
+    a.download = `${bookName}.${ext}`;
     a.click();
     URL.revokeObjectURL(url);
     
-    showToast(`${bookName}.md heruntergeladen`, 'success');
+    showToast(`${bookName}.${ext} heruntergeladen`, 'success');
 });
 
 // Download ZIP handler
@@ -1783,6 +1811,7 @@ function debounce(func, wait) {
 // Initialize
 loadConfig();
 updatePageNumberUI(); // Set initial visibility of page number options
+updateDownloadButtons(); // Set initial download button labels based on output format
 
 // Sidebar Toggle Logic
 function initSidebar() {
@@ -2333,6 +2362,11 @@ autoSaveFields.forEach(sel => {
     });
 });
 
+// Update download buttons when output format changes
+on('#outputFormat', 'change', () => {
+    updateDownloadButtons();
+});
+
 const autoSaveChecks = [
     '#forceOcr', '#useLlm', '#stripExistingOcr',
     '#redoInlineMath', '#disableImageExtraction'
@@ -2809,9 +2843,14 @@ function initShortcuts() {
                     e.preventDefault();
                     $('#btnStart')?.click();
                     break;
-                case 's': // Word anfordern
+                case 's': // Word anfordern (oder primäres Format bei JSON)
                     e.preventDefault();
-                    $('#btnDownloadDocx')?.click();
+                    const outputFmt = $('#outputFormat')?.value || 'markdown';
+                    if (outputFmt === 'json') {
+                        $('#btnDownloadMd')?.click();
+                    } else {
+                        $('#btnDownloadDocx')?.click();
+                    }
                     break;
                 case 'm': // Markdown laden
                     e.preventDefault();
