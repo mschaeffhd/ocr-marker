@@ -641,6 +641,10 @@ async function runPipeline() {
     const btnStart = $('#btnStart');
     btnStart.disabled = true;
     
+    // Check if file is an image (skip marker conversion)
+    const file = state.pdfFile;
+    const isImage = file && (file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(file.name));
+    
     // Get config values
     CONFIG.markerServerUrl = $('#markerServerUrl').value;
     CONFIG.markerUploadUrl = $('#markerServerUrl').value ? ($('#markerServerUrl').value.replace(/\/+$/, '') + '/upload') : './api/marker/upload';
@@ -659,14 +663,19 @@ async function runPipeline() {
     try {
         // Step 1: Prepare
         setStepStatus(1, 'active', 'Bereite Datei vor...');
-        await prepareFile(state.pdfFile);
+        await prepareFile(file);
         setStepStatus(1, 'completed', 'Datei bereit ✓');
         
-        // Step 2: Convert
-        setStepStatus(2, 'active', 'Konvertiere mit Marker...');
-        addLog('conversionLog', 'Starte Konvertierung...', 'info');
-        await convertWithMarker();
-        setStepStatus(2, 'completed', 'Konvertiert ✓');
+        // Step 2: Convert (skip for images - already handled in handleFileSelect)
+        if (isImage) {
+            setStepStatus(2, 'completed', 'Bild direkt geladen ✓ (keine Konvertierung nötig)');
+            addLog('conversionLog', 'Bild direkt geladen – keine Marker-Konvertierung nötig.', 'info');
+        } else {
+            setStepStatus(2, 'active', 'Konvertiere mit Marker...');
+            addLog('conversionLog', 'Starte Konvertierung...', 'info');
+            await convertWithMarker();
+            setStepStatus(2, 'completed', 'Konvertiert ✓');
+        }
         
         // Step 3: Describe
         setStepStatus(3, 'active', 'Generiere Beschreibungen...');
@@ -852,10 +861,15 @@ dropZone.addEventListener('drop', (e) => {
     dropZone.classList.remove('dragover');
     
     const files = e.dataTransfer.files;
-    if (files.length && files[0].type === 'application/pdf') {
-        handleFileSelect(files[0]);
-    } else {
-        showToast('Bitte eine PDF-Datei auswählen', 'error');
+    if (files.length) {
+        const file = files[0];
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+        const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
+        if (isPdf || isImage) {
+            handleFileSelect(file);
+        } else {
+            showToast('Bitte eine PDF- oder Bild-Datei auswählen', 'error');
+        }
     }
 });
 
@@ -871,15 +885,54 @@ function handleFileSelect(file) {
     // Auto-generate book name from filename (without extension)
     state.bookName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
     
+    // Detect file type
+    const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
+    
     dropZone.style.display = 'none';
     $('#fileInfo').style.display = 'flex';
     $('#fileName').textContent = file.name;
     $('#fileSize').textContent = formatFileSize(file.size);
     
-    // Render PDF preview
-    renderPdfPreview(file);
+    if (isImage) {
+        // Handle image file directly - no PDF conversion needed
+        handleImageFile(file);
+    } else {
+        // Render PDF preview
+        renderPdfPreview(file);
+    }
     
     showToast(`${file.name} ausgewählt`, 'info');
+}
+
+function handleImageFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const b64 = e.target.result.replace(/^data:image\/[^;]+;base64,/, '');
+        const imgName = file.name;
+        state.images = {};
+        state.images[imgName] = b64;
+        state.rawMarkdown = `![${imgName}](${imgName})`;
+        state.markdown = state.rawMarkdown;
+        state.totalPages = 1;
+        state.extractedImages = 1;
+        
+        // Show image preview in output area
+        $('#mdOutput').innerHTML = `<img src="data:image/jpeg;base64,${b64}" style="max-width:100%; border-radius:8px;">`;
+        $('#mdSource').textContent = state.markdown;
+        
+        // Update stats
+        $('#statPages').textContent = '1';
+        $('#statChars').textContent = state.markdown.length.toString();
+        $('#statImages').textContent = '1';
+        
+        // Show output section
+        $('#stepOutput').classList.add('active');
+        $('#outputSection').style.display = 'block';
+        
+        // Build compare page map
+        comparePageMap = { 1: { page: 1, images: [imgName] } };
+    };
+    reader.readAsDataURL(file);
 }
 
 // ===== PDF Preview Rendering =====
