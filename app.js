@@ -2307,8 +2307,10 @@ autoSaveChecks.forEach(sel => {
 function buildComparePageMap() {
     const map = {};
     
-    // 1. Add all rendered PDF pages
+    // 1. Add all rendered PDF pages (PDF pages are 1-based)
     for (const pageNum of Object.keys(pdfPageImages)) {
+        // Skip page 0 if it somehow exists (PDF pages start at 1)
+        if (pageNum === '0') continue;
         map[pageNum] = {
             pdfPage: pdfPageImages[pageNum],
             extractedImages: [],
@@ -2326,7 +2328,9 @@ function buildComparePageMap() {
             match = fname.match(/(\d+)/);
         }
         if (match) {
-            const pageNum = match[1];
+            let pageNum = match[1];
+            // Map page 0 to page 1 (PDFs are 1-based, some tools use 0-based indexing)
+            if (pageNum === '0') pageNum = '1';
             if (!map[pageNum]) {
                 map[pageNum] = { pdfPage: null, extractedImages: [], descriptions: [], fnames: [] };
             }

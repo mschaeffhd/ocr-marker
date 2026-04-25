@@ -1904,7 +1904,7 @@ body {
 }
 
 /* On wide monitors: place compare-view next to progress + preview */
-@media (min-width: 1200px) {
+@media (min-width: 1000px) {
     .results-layout {
         grid-template-columns: 1fr 1fr;
         align-items: start;
@@ -1919,6 +1919,12 @@ body {
     .results-layout-right {
         min-width: 0;
     }
+}
+
+/* When compare view is hidden, let preview take full width */
+.results-layout:has(> .compare-view[style*="display: none"]),
+.results-layout:not(:has(> .compare-view)) {
+    grid-template-columns: 1fr !important;
 }
 
 /* Responsive: comparison panels stack on narrow screens */
