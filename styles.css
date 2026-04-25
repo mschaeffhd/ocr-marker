@@ -1889,6 +1889,38 @@ body {
     width: 100%;
 }
 
+/* ===== Results Layout: Compare + Preview side-by-side on wide screens ===== */
+.results-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.results-layout-right {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* On wide monitors: place compare-view next to progress + preview */
+@media (min-width: 1200px) {
+    .results-layout {
+        grid-template-columns: 1fr 1fr;
+        align-items: start;
+    }
+    .results-layout .compare-view {
+        margin: 0;
+        max-height: 80vh;
+    }
+    .results-layout .compare-panel {
+        max-height: none;
+    }
+    .results-layout-right {
+        min-width: 0;
+    }
+}
+
 /* Responsive: comparison panels stack on narrow screens */
 @media (max-width: 768px) {
     .compare-layout {

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF → Markdown Pipeline</title>
-    <link rel="stylesheet" href="styles.css?v=20250422">
+    <link rel="stylesheet" href="styles.css?v=20250425">
     <script src="lib/jszip.min.js"></script>
     <script src="lib/crypto-js.min.js"></script>
     <script src="lib/marked.min.js"></script>
@@ -345,52 +345,56 @@ Beschreibung: …  / Bildtext: …
                                     <button class="btn btn-secondary" id="btnCopyMd">📋 Kopieren</button>
                                 </div>
                                 
-                                <!-- Comparison View -->
-                                <div id="compareView" class="compare-view" style="display:none;">
-                                    <div class="compare-header">
-                                        <div class="compare-nav">
-                                            <button class="btn btn-secondary" id="comparePrev">◀ Vorherige</button>
-                                            <span class="compare-page-info" id="comparePageInfo">Seite 0 von 0</span>
-                                            <button class="btn btn-secondary" id="compareNext">Nächste ▶</button>
-                                        </div>
-                                        <div class="compare-controls">
-                                            <button class="btn btn-icon" id="compareZoomOut" title="Verkleinern">🔍−</button>
-                                            <span class="compare-zoom-level" id="compareZoomLevel">100%</span>
-                                            <button class="btn btn-icon" id="compareZoomIn" title="Vergrößern">🔍+</button>
-                                            <button class="btn btn-text" id="compareClose">Schließen ✕</button>
-                                        </div>
-                                    </div>
-                                    <div class="compare-layout">
-                                        <div class="compare-panel compare-panel-original">
-                                            <div class="compare-panel-label">📄 Original PDF</div>
-                                            <div class="compare-panel-content" id="compareOriginal"></div>
-                                        </div>
-                                        <div class="compare-panel compare-panel-extracted">
-                                            <div class="compare-panel-label">
-                                                <span>🎯 Erkannte Bilder</span>
-                                                <span class="compare-badge" id="compareBadge">0</span>
+                                <div class="results-layout">
+                                    <!-- Comparison View -->
+                                    <div id="compareView" class="compare-view" style="display:none;">
+                                        <div class="compare-header">
+                                            <div class="compare-nav">
+                                                <button class="btn btn-secondary" id="comparePrev">◀ Vorherige</button>
+                                                <span class="compare-page-info" id="comparePageInfo">Seite 0 von 0</span>
+                                                <button class="btn btn-secondary" id="compareNext">Nächste ▶</button>
                                             </div>
-                                            <div class="compare-panel-content" id="compareExtracted"></div>
+                                            <div class="compare-controls">
+                                                <button class="btn btn-icon" id="compareZoomOut" title="Verkleinern">🔍−</button>
+                                                <span class="compare-zoom-level" id="compareZoomLevel">100%</span>
+                                                <button class="btn btn-icon" id="compareZoomIn" title="Vergrößern">🔍+</button>
+                                                <button class="btn btn-text" id="compareClose">Schließen ✕</button>
+                                            </div>
+                                        </div>
+                                        <div class="compare-layout">
+                                            <div class="compare-panel compare-panel-original">
+                                                <div class="compare-panel-label">📄 Original PDF</div>
+                                                <div class="compare-panel-content" id="compareOriginal"></div>
+                                            </div>
+                                            <div class="compare-panel compare-panel-extracted">
+                                                <div class="compare-panel-label">
+                                                    <span>🎯 Erkannte Bilder</span>
+                                                    <span class="compare-badge" id="compareBadge">0</span>
+                                                </div>
+                                                <div class="compare-panel-content" id="compareExtracted"></div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                                
-                                <div id="describeProgress" class="progress-container" style="display:none;">
-                                    <div class="progress-bar-wrapper">
-                                        <div id="progressFill" class="progress-fill"></div>
-                                    </div>
-                                    <span id="progressLabel" class="progress-label">0 / 0 Bilder</span>
-                                </div>
+                                    
+                                    <div class="results-layout-right">
+                                        <div id="describeProgress" class="progress-container" style="display:none;">
+                                            <div class="progress-bar-wrapper">
+                                                <div id="progressFill" class="progress-fill"></div>
+                                            </div>
+                                            <span id="progressLabel" class="progress-label">0 / 0 Bilder</span>
+                                        </div>
 
-                                <div class="md-preview-container">
-                                    <div class="md-preview-toolbar">
-                                        <button class="toolbar-btn active" data-view="split">Split</button>
-                                        <button class="toolbar-btn" data-view="rendered">Vorschau</button>
-                                        <button class="toolbar-btn" data-view="markdown">Source</button>
-                                    </div>
-                                    <div class="md-preview">
-                                        <div class="md-source" id="mdSource"></div>
-                                        <div class="md-rendered" id="mdRendered" style="display:none"></div>
+                                        <div class="md-preview-container">
+                                            <div class="md-preview-toolbar">
+                                                <button class="toolbar-btn active" data-view="split">Split</button>
+                                                <button class="toolbar-btn" data-view="rendered">Vorschau</button>
+                                                <button class="toolbar-btn" data-view="markdown">Source</button>
+                                            </div>
+                                            <div class="md-preview">
+                                                <div class="md-source" id="mdSource"></div>
+                                                <div class="md-rendered" id="mdRendered" style="display:none"></div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
