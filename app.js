@@ -1943,19 +1943,26 @@ function applyCrop() {
     if (!editorState.cropRect || !editorState.canvas) return;
     const r = editorState.cropRect;
     if (r.w < 10 || r.h < 10) { showToast('Bereich zu klein', 'error'); return; }
-    const data = editorState.ctx.getImageData(r.x, r.y, r.w, r.h);
+    
+    // CRITICAL: Use bgImage (clean, no overlay) for cropping, NOT the visible canvas
+    const bgCtx = editorState.bgImage.getContext('2d');
+    const data = bgCtx.getImageData(r.x, r.y, r.w, r.h);
+    
     const nc = document.createElement('canvas');
     nc.width = r.w; nc.height = r.h;
     nc.getContext('2d').putImageData(data, 0, 0);
+    
     editorState.canvas.width = r.w;
     editorState.canvas.height = r.h;
     editorState.ctx.clearRect(0, 0, r.w, r.h);
     editorState.ctx.drawImage(nc, 0, 0);
+    
     // Sync bgImage to new cropped size
     editorState.bgImage = document.createElement('canvas');
     editorState.bgImage.width = r.w;
     editorState.bgImage.height = r.h;
     editorState.bgImage.getContext('2d').drawImage(nc, 0, 0);
+    
     editorState.cropRect = null;
     $('#cropActionBar').style.display = 'none';
     pushUndo();
@@ -1964,7 +1971,15 @@ function applyCrop() {
 
 function saveEditor() {
     if (!editorState.canvas || !editorState.fname) return;
-    // Crop overlay is NOT in bgImage, so we can safely export bgImage
+    
+    // Ensure crop overlay is removed before saving
+    if (editorState.cropRect) {
+        editorState.cropRect = null;
+        $('#cropActionBar').style.display = 'none';
+        redrawCanvas();
+    }
+    
+    // bgImage always holds the clean image (no overlays)
     const b64 = editorState.bgImage.toDataURL('image/jpeg', 0.95).replace(/^data:image\/jpeg;base64,/, '');
     state.images[editorState.fname] = b64;
     comparePageMap = buildComparePageMap();
