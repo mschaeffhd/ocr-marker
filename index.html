@@ -385,29 +385,39 @@
                     </div>
 
                     <!-- Pipeline Activity Log -->
-                    <section class="activity-log">
-                        <div class="panel-header">
-                            <h2>📊 Pipeline Aktivitäten</h2>
-                        </div>
-                        <div class="log-grid">
-                            <div class="log-column">
-                                <h3>Marker Konvertierung</h3>
-                                <div class="step-log" id="conversionLog"></div>
+                    <section class="activity-log collapsed" id="activityLogPanel">
+                        <div class="panel-header" data-toggle="activityLogPanel" style="cursor: pointer;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span class="collapse-icon">▼</span>
+                                <h2>📊 Pipeline Aktivitäten</h2>
                             </div>
-                            <div class="log-column">
-                                <h3>KI-Bildanalyse</h3>
-                                <div class="step-log" id="describeLog"></div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="log-grid">
+                                <div class="log-column">
+                                    <h3>Marker Konvertierung</h3>
+                                    <div class="step-log" id="conversionLog"></div>
+                            </div>
+                                <div class="log-column">
+                                    <h3>KI-Bildanalyse</h3>
+                                    <div class="step-log" id="describeLog"></div>
+                                </div>
                             </div>
                         </div>
                     </section>
 
                     <!-- Terminal Output (Moved here as requested) -->
-                    <section class="console-panel">
-                        <div class="panel-header">
-                            <h2>💻 System-Konsole</h2>
-                            <button class="btn btn-text" id="btnClearConsole">Verlauf löschen</button>
+                    <section class="console-panel collapsed" id="consolePanel">
+                        <div class="panel-header" data-toggle="consolePanel" style="cursor: pointer;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span class="collapse-icon">▼</span>
+                                <h2>💻 System-Konsole</h2>
+                            </div>
                         </div>
-                        <div class="console-body" id="systemConsole"></div>
+                        <div class="panel-body">
+                            <button class="btn btn-text" id="btnClearConsole" style="margin-bottom: 8px;">Verlauf löschen</button>
+                            <div class="console-body" id="systemConsole"></div>
+                        </div>
                     </section>
                 </section>
             </main>

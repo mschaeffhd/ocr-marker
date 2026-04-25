@@ -631,6 +631,17 @@ async function createZipArchive() {
     return content;
 }
 
+// Regenerate ZIP in background when images/descriptions change
+async function regenerateZip() {
+    if (!state.zipBlob) return; // Only if ZIP was already created
+    try {
+        await createZipArchive();
+        debugLog('ZIP-Archiv im Hintergrund aktualisiert', 'info');
+    } catch (err) {
+        console.error('ZIP regeneration error:', err);
+    }
+}
+
 // ===== Main Pipeline =====
 async function runPipeline() {
     if (state.pipelineRunning) return;
@@ -2132,6 +2143,10 @@ function saveEditor() {
     // bgImage always holds the clean image (no overlays)
     const b64 = editorState.bgImage.toDataURL('image/jpeg', 0.95).replace(/^data:image\/jpeg;base64,/, '');
     state.images[editorState.fname] = b64;
+    
+    // Regenerate ZIP in background (image data changed)
+    regenerateZip();
+    
     comparePageMap = buildComparePageMap();
     if (compareViewOpen) renderComparePage();
     renderMarkdown(state.markdown);
@@ -2147,6 +2162,10 @@ function handleSwapFile(file) {
     reader.onload = (e) => {
         const b64 = e.target.result.replace(/^data:image\/[^;]+;base64,/, '');
         state.images[editorState.fname] = b64;
+        
+        // Regenerate ZIP in background (image swapped)
+        regenerateZip();
+        
         openEditor(editorState.fname);
         showToast('Bild ausgetauscht!', 'success');
     };
@@ -2564,6 +2583,9 @@ function saveDescription(fname, newDesc) {
     // Update comparison view
     comparePageMap = buildComparePageMap();
     renderComparePage();
+    
+    // Regenerate ZIP in background
+    regenerateZip();
     
     showToast('Beschreibung gespeichert', 'success');
 }

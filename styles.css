@@ -335,11 +335,15 @@ body {
     color: var(--text-dim);
 }
 
-.config-panel.collapsed .collapse-icon {
+.config-panel.collapsed .collapse-icon,
+.activity-log.collapsed .collapse-icon,
+.console-panel.collapsed .collapse-icon {
     transform: rotate(-90deg);
 }
 
-.config-panel.collapsed .panel-body {
+.config-panel.collapsed .panel-body,
+.activity-log.collapsed .panel-body,
+.console-panel.collapsed .panel-body {
     display: none;
 }
 
