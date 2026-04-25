@@ -88,6 +88,22 @@
                             <label for="paginateOutput">Paginate Output</label>
                             <input type="checkbox" id="paginateOutput">
                         </div>
+                        <div id="pageNumberOptions" class="page-number-options" style="display:none; padding-left: 16px; border-left: 2px solid var(--border); margin-left: 4px;">
+                            <div class="checkbox-group">
+                                <label for="showPageNumbers">Seitenzahl in Doppelklammer anzeigen</label>
+                                <input type="checkbox" id="showPageNumbers">
+                            </div>
+                            <div id="pageNumberInputs" style="display:none;">
+                                <div class="form-group">
+                                    <label for="pageNumberStart">Seitennummerierung ab Seite</label>
+                                    <input type="number" id="pageNumberStart" value="1" min="1">
+                                </div>
+                                <div class="form-group">
+                                    <label for="pageNumberInitial">Nummerierung starten mit</label>
+                                    <input type="number" id="pageNumberInitial" value="1" min="0">
+                                </div>
+                            </div>
+                        </div>
                         <div class="form-group">
                             <label for="outputFormat">Output Format</label>
                             <select id="outputFormat">
@@ -98,18 +114,6 @@
                         <div class="form-group">
                             <label for="pageRange">Page Range</label>
                             <input type="text" id="pageRange" placeholder="z.B. 1-10,15">
-                        </div>
-                        <div class="checkbox-group">
-                            <label for="showPageNumbers">Seitenzahlen anzeigen</label>
-                            <input type="checkbox" id="showPageNumbers" checked>
-                        </div>
-                        <div class="form-group">
-                            <label for="pageNumberStart">Seitennummerierung ab Seite</label>
-                            <input type="number" id="pageNumberStart" value="1" min="1">
-                        </div>
-                        <div class="form-group">
-                            <label for="pageNumberInitial">Nummerierung starten mit</label>
-                            <input type="number" id="pageNumberInitial" value="1" min="0">
                         </div>
                     </div>
                 </section>

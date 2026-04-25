@@ -383,47 +383,34 @@ function updateMarkdownWithCaptions() {
 }
 
 function insertPageNumbers(md) {
-    const showNums = $('#showPageNumbers')?.checked ?? true;
-    if (!showNums) return md;
+    const paginate = $('#paginateOutput')?.checked || false;
+    const showNums = $('#showPageNumbers')?.checked || false;
+    
+    // Only works when both Paginate Output and Show Page Numbers are active
+    if (!paginate || !showNums) return md;
     
     const startPage = parseInt($('#pageNumberStart')?.value || '1', 10) || 1;
-    const initialNum = parseInt($('#pageNumberInitial')?.value || '1', 10) || 0;
+    const initialNum = parseInt($('#pageNumberInitial')?.value || '1', 10) || 1;
     
     // Detect page break separator used by marker
-    // Marker with paginate_output may output:
-    //   - literal backslash-f: \f  (two chars: \ and f)
-    //   - actual form feed: \x0C  (ASCII 12)
-    //   - or horizontal rule: ---
     let pages = [];
-    let separator = '\n';
     
-    // Check for literal \f (backslash + f) - most common in marker output
     if (md.includes('\\f')) {
         pages = md.split(/\\f+/);
-        separator = '\\f';
         console.log(`[PageNumbers] Split on literal \\f, found ${pages.length} pages`);
-    }
-    // Check for actual form feed character (ASCII 12)
-    else if (md.includes('\x0C')) {
+    } else if (md.includes('\x0C')) {
         pages = md.split(/\x0C+/);
-        separator = '\x0C';
         console.log(`[PageNumbers] Split on form feed char, found ${pages.length} pages`);
-    }
-    // Fallback: horizontal rule
-    else if (md.includes('\n---\n')) {
+    } else if (md.includes('\n---\n')) {
         pages = md.split('\n---\n');
-        separator = '\n---\n';
         console.log(`[PageNumbers] Split on horizontal rule (---), found ${pages.length} pages`);
-    }
-    // No page breaks found
-    else {
+    } else {
         pages = [md];
         console.log('[PageNumbers] No page breaks found, treating as single page');
     }
     
-    // Filter out empty pages (trailing separators can create empty strings)
+    // Filter out empty pages
     pages = pages.filter(p => p.trim().length > 0);
-    
     if (pages.length === 0) return md;
     
     console.log(`[PageNumbers] After filter: ${pages.length} pages, startPage=${startPage}, initialNum=${initialNum}`);
@@ -432,14 +419,15 @@ function insertPageNumbers(md) {
     let currentNum = initialNum;
     
     pages.forEach((page, index) => {
-        const pageNum = index + 1; // 1-based page index
+        const pageNum = index + 1;
         const prefix = (pageNum < startPage) ? '(( ))' : `((${currentNum++}))`;
         const trimmed = page.replace(/^\n+/, '');
         result.push(prefix + '\n' + trimmed);
     });
     
-    const output = result.join(separator);
-    console.log('[PageNumbers] Output preview:', output.substring(0, 250));
+    // Join with newline (pagebreak \f is replaced by the page number prefix)
+    const output = result.join('\n');
+    console.log('[PageNumbers] Output preview:', output.substring(0, 300));
     return output;
 }
 
@@ -1348,7 +1336,7 @@ function saveConfig() {
         pageRange: $('#pageRange')?.value || '',
         paginateOutput: $('#paginateOutput')?.checked || false,
         // Seitenzahlen Optionen
-        showPageNumbers: $('#showPageNumbers')?.checked ?? true,
+        showPageNumbers: $('#showPageNumbers')?.checked || false,
         pageNumberStart: $('#pageNumberStart')?.value || '1',
         pageNumberInitial: $('#pageNumberInitial')?.value || '1',
         // Experimentelle Optionen
@@ -1420,9 +1408,13 @@ function loadConfig() {
             if ($('#pageRange')) $('#pageRange').value = config.pageRange || '';
             if ($('#paginateOutput')) $('#paginateOutput').checked = config.paginateOutput || false;
             // Seitenzahlen Optionen
-            if ($('#showPageNumbers')) $('#showPageNumbers').checked = config.showPageNumbers !== undefined ? config.showPageNumbers : true;
+            if ($('#showPageNumbers')) $('#showPageNumbers').checked = config.showPageNumbers || false;
             if ($('#pageNumberStart')) $('#pageNumberStart').value = config.pageNumberStart || '1';
             if ($('#pageNumberInitial')) $('#pageNumberInitial').value = config.pageNumberInitial || '1';
+            
+            // Update page number UI visibility after loading config
+            updatePageNumberUI();
+            
             // Experimentelle Optionen
             if ($('#useLlm')) $('#useLlm').checked = config.useLlm || false;
             if ($('#stripExistingOcr')) $('#stripExistingOcr').checked = config.stripExistingOcr || false;
@@ -1640,6 +1632,7 @@ function debounce(func, wait) {
 
 // Initialize
 loadConfig();
+updatePageNumberUI(); // Set initial visibility of page number options
 
 // Sidebar Toggle Logic
 function initSidebar() {
@@ -2121,6 +2114,49 @@ document.addEventListener('keydown', (e) => {
     else if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undoEditor(); }
 });
 
+// ===== Page Number UI Visibility Control =====
+function updatePageNumberUI() {
+    const paginate = $('#paginateOutput')?.checked || false;
+    const showNums = $('#showPageNumbers')?.checked || false;
+    
+    const optsContainer = $('#pageNumberOptions');
+    const inputsContainer = $('#pageNumberInputs');
+    const showNumsCheckbox = $('#showPageNumbers');
+    
+    // Show/hide the entire page number options block
+    if (optsContainer) optsContainer.style.display = paginate ? 'block' : 'none';
+    
+    // Enable/disable the checkbox
+    if (showNumsCheckbox) showNumsCheckbox.disabled = !paginate;
+    
+    // Show/hide the number input fields
+    if (inputsContainer) inputsContainer.style.display = (paginate && showNums) ? 'block' : 'none';
+}
+
+// Paginate Output toggle
+on('#paginateOutput', 'change', () => {
+    if (typeof saveConfig === 'function') saveConfig();
+    updatePageNumberUI();
+    if (state.markdown) renderMarkdown(state.markdown);
+});
+
+// Show Page Numbers toggle
+on('#showPageNumbers', 'change', () => {
+    if (typeof saveConfig === 'function') saveConfig();
+    updatePageNumberUI();
+    if (state.markdown) renderMarkdown(state.markdown);
+});
+
+// Page number inputs
+on('#pageNumberStart', 'change', () => {
+    if (typeof saveConfig === 'function') saveConfig();
+    if (state.markdown) renderMarkdown(state.markdown);
+});
+on('#pageNumberInitial', 'change', () => {
+    if (typeof saveConfig === 'function') saveConfig();
+    if (state.markdown) renderMarkdown(state.markdown);
+});
+
 // ===== Auto-save settings =====
 // Save model selection immediately when changed
 on('#modelSelect', 'change', () => {
@@ -2140,27 +2176,13 @@ autoSaveFields.forEach(sel => {
 });
 
 const autoSaveChecks = [
-    '#forceOcr', '#paginateOutput', '#useLlm', '#stripExistingOcr',
-    '#redoInlineMath', '#disableImageExtraction', '#showPageNumbers'
+    '#forceOcr', '#useLlm', '#stripExistingOcr',
+    '#redoInlineMath', '#disableImageExtraction'
 ];
 autoSaveChecks.forEach(sel => {
     on(sel, 'change', () => {
         if (typeof saveConfig === 'function') saveConfig();
-        // Re-render markdown when page number settings change
-        if (sel === '#showPageNumbers' && state.markdown) {
-            renderMarkdown(state.markdown);
-        }
     });
-});
-
-// Auto-save page number inputs and re-render
-on('#pageNumberStart', 'change', () => {
-    if (typeof saveConfig === 'function') saveConfig();
-    if (state.markdown) renderMarkdown(state.markdown);
-});
-on('#pageNumberInitial', 'change', () => {
-    if (typeof saveConfig === 'function') saveConfig();
-    if (state.markdown) renderMarkdown(state.markdown);
 });
 
 // ===== Comparison View Functions =====
