@@ -1,0 +1,17 @@
+{
+  "name": "Marker PDF to Markdown",
+  "short_name": "Marker",
+  "description": "Convert PDF files to clean Markdown and Word documents with AI descriptions.",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#0b0f1a",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

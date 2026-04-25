@@ -1,0 +1,12 @@
+# CORS Header für den Proxy
+Header always set Access-Control-Allow-Origin "*"
+Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
+
+# Proxy Rule: Requests an /api/marker/upload werden an die echte API weitergeleitet
+RewriteEngine On
+RewriteRule ^api/marker/upload$ https://test-ki2.sbbz-ilvesheim.de/marker/upload [P,NE,L]
+
+# Preflight Requests (OPTIONS) abfangen
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule ^api/marker/upload$ - [R=204,L]
