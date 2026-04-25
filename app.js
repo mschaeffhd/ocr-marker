@@ -2712,6 +2712,10 @@ async function reDescribeImage(fname) {
     }
     
     try {
+        // Get custom prompt or use default
+        const customPrompt = $('#imagePrompt')?.value?.trim();
+        const promptText = customPrompt || DEFAULT_IMAGE_PROMPT;
+        
         const payload = {
             model: CONFIG.model,
             stream: false,
@@ -2721,7 +2725,7 @@ async function reDescribeImage(fname) {
                     content: [
                         {
                             type: 'text',
-                            text: 'Beschreibe dieses Bild aus einem Lehrbuch in einem kurzen, präzisen Satz auf Deutsch. Nur die Beschreibung, kein weiterer Text.'
+                            text: promptText
                         },
                         {
                             type: 'image_url',
@@ -2731,8 +2735,7 @@ async function reDescribeImage(fname) {
                         }
                     ]
                 }
-            ],
-            max_tokens: 100
+            ]
         };
         
         let baseUrl = CONFIG.openwebuiUrl.replace(/\/+$/, '');
