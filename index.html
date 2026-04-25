@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="de">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,17 +18,20 @@
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
         }
     </script>
-    <link rel="icon" href="icon-512.png"/>
-    <link rel="apple-touch-icon" href="icon-512.png"/>
+    <link rel="icon" href="icon-512.png" />
+    <link rel="apple-touch-icon" href="icon-512.png" />
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4f46e5">
 </head>
+
 <body>
     <div class="app">
         <header class="header">
             <div class="header-main">
-                <button id="sidebarToggle" class="btn btn-icon sidebar-toggle-premium" title="Einstellungen umschalten" aria-label="Einstellungen umschalten">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <button id="sidebarToggle" class="btn btn-icon sidebar-toggle-premium" title="Einstellungen umschalten"
+                    aria-label="Einstellungen umschalten">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
                         <line x1="4" y1="21" x2="4" y2="14"></line>
                         <line x1="4" y1="10" x2="4" y2="3"></line>
                         <line x1="12" y1="21" x2="12" y2="12"></line>
@@ -56,7 +60,8 @@
                 <section class="config-panel" id="configPanel">
                     <div class="panel-header" data-toggle="configPanel">
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <button id="sidebarClose" class="btn-close-sidebar" title="Schließen" aria-label="Einstellungen schließen">✕</button>
+                            <button id="sidebarClose" class="btn-close-sidebar" title="Schließen"
+                                aria-label="Einstellungen schließen">✕</button>
                             <span class="collapse-icon">▼</span>
                             <h2>⚙️ Basis-Einstellungen</h2>
                         </div>
@@ -76,14 +81,15 @@ Beschreibung: …  / Bildtext: …
 * If there is text in the image stick with the language it is written in and don't translate it.</textarea>
                         </div>
                         <div class="checkbox-group">
-                            <label for="forceOcr">Force OCR</label>
+                            <label for="forceOcr">Erzwinge OCR</label>
                             <input type="checkbox" id="forceOcr">
                         </div>
                         <div class="checkbox-group">
-                            <label for="paginateOutput">Paginate Output</label>
+                            <label for="paginateOutput">Ausgabe mit Seitenzahlen</label>
                             <input type="checkbox" id="paginateOutput">
                         </div>
-                        <div id="pageNumberOptions" class="page-number-options" style="display:none; padding-left: 16px; border-left: 2px solid var(--border); margin-left: 4px;">
+                        <div id="pageNumberOptions" class="page-number-options"
+                            style="display:none; padding-left: 16px; border-left: 2px solid var(--border); margin-left: 4px;">
                             <div class="checkbox-group">
                                 <label for="showPageNumbers">Seitenzahl in Doppelklammer anzeigen</label>
                                 <input type="checkbox" id="showPageNumbers">
@@ -100,14 +106,14 @@ Beschreibung: …  / Bildtext: …
                             </div>
                         </div>
                         <div class="form-group">
-                            <label for="outputFormat">Output Format</label>
+                            <label for="outputFormat">Ausgabeformat</label>
                             <select id="outputFormat">
                                 <option value="markdown">Markdown</option>
                                 <option value="json">JSON</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="pageRange">Page Range</label>
+                            <label for="pageRange">zu erkennende Seiten</label>
                             <input type="text" id="pageRange" placeholder="z.B. 1-10,15">
                         </div>
                     </div>
@@ -224,7 +230,7 @@ Beschreibung: …  / Bildtext: …
                     </div>
                     <div class="panel-body">
                         <div class="form-group">
-                            <label for="apiToken">OpenWebUI API Token</label>
+                            <label for="apiToken">API Token</label>
                             <input type="password" id="apiToken" value="" placeholder="sk-...">
                         </div>
                         <div class="form-group">
@@ -234,15 +240,18 @@ Beschreibung: …  / Bildtext: …
                             </select>
                         </div>
                         <div style="text-align: right; margin-top: -8px;">
-                            <button class="btn btn-text" id="btnReloadModels" title="Modelle neu laden">🔄 Modelle neu laden</button>
+                            <button class="btn btn-text" id="btnReloadModels" title="Modelle neu laden">🔄 Modelle neu
+                                laden</button>
                         </div>
                         <div class="form-group">
                             <label for="markerServerUrl">Marker Server URL</label>
-                            <input type="text" id="markerServerUrl" value="./api/marker/upload" placeholder="./api/marker/upload">
+                            <input type="text" id="markerServerUrl" value="./api/marker/upload"
+                                placeholder="./api/marker/upload">
                         </div>
                         <div class="form-group">
-                            <label for="openwebuiUrl">OpenWebUI URL</label>
-                            <input type="text" id="openwebuiUrl" value="https://openwebui.sbbz-ilvesheim.de/api" placeholder="https://openwebui.sbbz-ilvesheim.de/api">
+                            <label for="openwebuiUrl">Base URL</label>
+                            <input type="text" id="openwebuiUrl" value="https://openwebui.sbbz-ilvesheim.de/api"
+                                placeholder="https://openwebui.sbbz-ilvesheim.de/api">
                         </div>
                     </div>
                 </section>
@@ -296,8 +305,10 @@ Beschreibung: …  / Bildtext: …
                             </div>
                             <div class="step-body">
                                 <div class="drop-zone" id="dropZone">
-                                    <p class="drop-text">PDF oder Bild hier ablegen oder <span class="browse-link">wählen</span></p>
-                                    <input type="file" id="pdfInput" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif" style="display:none">
+                                    <p class="drop-text">PDF oder Bild hier ablegen oder <span
+                                            class="browse-link">wählen</span></p>
+                                    <input type="file" id="pdfInput" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif"
+                                        style="display:none">
                                 </div>
                                 <div class="file-info" id="fileInfo" style="display:none">
                                     <div class="file-icon">📄</div>
@@ -308,14 +319,17 @@ Beschreibung: …  / Bildtext: …
                                     <button class="btn-remove" id="removeFile" aria-label="Datei entfernen">✕</button>
                                 </div>
                                 <div class="action-bar" style="display: flex; gap: 12px; margin-top: 12px;">
-                                    <button class="btn btn-primary btn-start" id="btnStart" style="flex: 1; height: 50px; font-size: 1.1rem;">
+                                    <button class="btn btn-primary btn-start" id="btnStart"
+                                        style="flex: 1; height: 50px; font-size: 1.1rem;">
                                         🚀 Pipeline starten
                                     </button>
-                                    <button class="btn btn-secondary" id="btnReset" style="width: 50px; height: 50px; padding: 0;" title="Pipeline zurücksetzen" aria-label="Pipeline zurücksetzen">
+                                    <button class="btn btn-secondary" id="btnReset"
+                                        style="width: 50px; height: 50px; padding: 0;" title="Pipeline zurücksetzen"
+                                        aria-label="Pipeline zurücksetzen">
                                         🔄
                                     </button>
                                 </div>
-                                
+
                                 <!-- PDF Preview -->
                                 <div id="pdfPreview" class="pdf-preview" style="display:none;">
                                     <div class="pdf-preview-header">
@@ -325,7 +339,8 @@ Beschreibung: …  / Bildtext: …
                                     <div class="pdf-grid" id="pdfGrid"></div>
                                     <div class="pdf-preview-more" id="pdfPreviewMore" style="display:none;">
                                         <span id="pdfPreviewMoreText">… und weitere Seiten</span>
-                                        <button class="btn btn-text" id="btnLoadAllPdf" style="margin-left: 8px;">Alle laden</button>
+                                        <button class="btn btn-text" id="btnLoadAllPdf" style="margin-left: 8px;">Alle
+                                            laden</button>
                                     </div>
                                 </div>
                             </div>
@@ -340,48 +355,57 @@ Beschreibung: …  / Bildtext: …
                             </div>
                             <div class="step-body">
                                 <div class="pipeline-stats-compact" id="conversionStats" style="display: none;">
-                                    <span class="stat-item"><strong>Zeichen:</strong> <span id="statChars">0</span></span>
+                                    <span class="stat-item"><strong>Zeichen:</strong> <span
+                                            id="statChars">0</span></span>
                                     <span class="stat-divider">|</span>
-                                    <span class="stat-item"><strong>Bilder:</strong> <span id="statImages">0</span></span>
+                                    <span class="stat-item"><strong>Bilder:</strong> <span
+                                            id="statImages">0</span></span>
                                     <span class="stat-divider" id="uploadDivider" style="display:none;">|</span>
-                                    <span class="stat-item" id="uploadSummary" style="display:none;"><strong>Archiv:</strong> <span id="zipStatus">Wartend</span></span>
+                                    <span class="stat-item" id="uploadSummary"
+                                        style="display:none;"><strong>Archiv:</strong> <span
+                                            id="zipStatus">Wartend</span></span>
                                 </div>
 
                                 <div class="markdown-actions">
-                                    <button class="btn btn-secondary" id="btnDownloadDocx">📘 Word-Datei (.docx)</button>
+                                    <button class="btn btn-secondary" id="btnDownloadDocx">📘 Word-Datei
+                                        (.docx)</button>
                                     <button class="btn btn-secondary" id="btnDownloadMd">📄 Markdown laden</button>
-                                    <button class="btn btn-secondary" id="btnDownloadZip" style="display: none;">📦 Archiv (ZIP)</button>
+                                    <button class="btn btn-secondary" id="btnDownloadZip" style="display: none;">📦
+                                        Archiv (ZIP)</button>
                                     <button class="btn btn-secondary" id="btnCopyMd">📋 Kopieren</button>
                                 </div>
-                                
+
                                 <div id="describeProgress" class="progress-container" style="display:none;">
                                     <div class="progress-bar-wrapper">
                                         <div id="progressFill" class="progress-fill"></div>
                                     </div>
                                     <span id="progressLabel" class="progress-label">0 / 0 Bilder</span>
                                 </div>
-                                
+
                                 <div class="results-layout-wrapper">
                                     <!-- Comparison View -->
                                     <div id="compareView" class="compare-view" style="display:none;">
                                         <div class="compare-header">
                                             <div class="compare-nav">
                                                 <button class="btn btn-secondary" id="comparePrev">◀ Vorherige</button>
-                                                <span class="compare-page-info" id="comparePageInfo">Seite 0 von 0</span>
+                                                <span class="compare-page-info" id="comparePageInfo">Seite 0 von
+                                                    0</span>
                                                 <button class="btn btn-secondary" id="compareNext">Nächste ▶</button>
                                             </div>
 
                                         </div>
                                         <div class="compare-layout">
                                             <div class="compare-panel compare-panel-original" id="panelOriginal">
-                                                <div class="compare-panel-label" title="Klicken zum Ein/Ausblenden" style="cursor:pointer;" onclick="togglePanel('panelOriginal')">
+                                                <div class="compare-panel-label" title="Klicken zum Ein/Ausblenden"
+                                                    style="cursor:pointer;" onclick="togglePanel('panelOriginal')">
                                                     <span>📄 Original PDF</span>
                                                     <span class="panel-toggle-icon">◀</span>
                                                 </div>
                                                 <div class="compare-panel-content" id="compareOriginal"></div>
                                             </div>
                                             <div class="compare-panel compare-panel-extracted" id="panelExtracted">
-                                                <div class="compare-panel-label" title="Klicken zum Ein/Ausblenden" style="cursor:pointer;" onclick="togglePanel('panelExtracted')">
+                                                <div class="compare-panel-label" title="Klicken zum Ein/Ausblenden"
+                                                    style="cursor:pointer;" onclick="togglePanel('panelExtracted')">
                                                     <span>🎯 Erkannte Bilder</span>
                                                     <span class="compare-badge" id="compareBadge">0</span>
                                                     <span class="panel-toggle-icon">◀</span>
@@ -389,11 +413,15 @@ Beschreibung: …  / Bildtext: …
                                                 <div class="compare-panel-content" id="compareExtracted"></div>
                                             </div>
                                             <div class="compare-panel compare-panel-markdown" id="panelMarkdown">
-                                                <div class="compare-panel-label" title="Klicken zum Ein/Ausblenden" style="cursor:pointer;" onclick="togglePanel('panelMarkdown')">
+                                                <div class="compare-panel-label" title="Klicken zum Ein/Ausblenden"
+                                                    style="cursor:pointer;" onclick="togglePanel('panelMarkdown')">
                                                     <span>📝 Vorschau</span>
-                                                    <div class="compare-panel-toolbar" onclick="event.stopPropagation()">
-                                                        <button class="toolbar-btn active" data-view="split">Split</button>
-                                                        <button class="toolbar-btn" data-view="rendered">Vorschau</button>
+                                                    <div class="compare-panel-toolbar"
+                                                        onclick="event.stopPropagation()">
+                                                        <button class="toolbar-btn active"
+                                                            data-view="split">Split</button>
+                                                        <button class="toolbar-btn"
+                                                            data-view="rendered">Vorschau</button>
                                                         <button class="toolbar-btn" data-view="markdown">Source</button>
                                                     </div>
                                                     <span class="panel-toggle-icon">◀</span>
@@ -401,7 +429,8 @@ Beschreibung: …  / Bildtext: …
                                                 <div class="compare-panel-content">
                                                     <div class="md-preview">
                                                         <div class="md-source" id="mdSource"></div>
-                                                        <div class="md-rendered" id="mdRendered" style="display:none"></div>
+                                                        <div class="md-rendered" id="mdRendered" style="display:none">
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -425,7 +454,7 @@ Beschreibung: …  / Bildtext: …
                                 <div class="log-column">
                                     <h3>Marker Konvertierung</h3>
                                     <div class="step-log" id="conversionLog"></div>
-                            </div>
+                                </div>
                                 <div class="log-column">
                                     <h3>KI-Bildanalyse</h3>
                                     <div class="step-log" id="describeLog"></div>
@@ -443,7 +472,8 @@ Beschreibung: …  / Bildtext: …
                             </div>
                         </div>
                         <div class="panel-body">
-                            <button class="btn btn-text" id="btnClearConsole" style="margin-bottom: 8px;">Verlauf löschen</button>
+                            <button class="btn btn-text" id="btnClearConsole" style="margin-bottom: 8px;">Verlauf
+                                löschen</button>
                             <div class="console-body" id="systemConsole"></div>
                         </div>
                     </section>
@@ -522,4 +552,5 @@ Beschreibung: …  / Bildtext: …
 
     <script src="app.js?v=20250427"></script>
 </body>
+
 </html>
