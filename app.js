@@ -392,20 +392,38 @@ function insertPageNumbers(md) {
     const startPage = parseInt($('#pageNumberStart')?.value || '1', 10) || 1;
     const initialNum = parseInt($('#pageNumberInitial')?.value || '1', 10) || 1;
     
-    // Detect page break separator used by marker
     let pages = [];
+    let splitBy = 'none';
     
-    if (md.includes('\\f')) {
+    // Pattern 1: Marker page numbers like {5}------------------------------------------------
+    // This is the most common format when marker paginate_output is active
+    const markerMatch = md.match(/\n?\{\d+\}[-]+\n?/);
+    if (markerMatch) {
+        pages = md.split(/\n?\{\d+\}[-]+\n?/);
+        splitBy = 'marker-page-numbers';
+        console.log(`[PageNumbers] Split on Marker page numbers, found ${pages.length} raw segments`);
+    }
+    // Pattern 2: Literal \f (backslash + f)
+    else if (md.includes('\\f')) {
         pages = md.split(/\\f+/);
-        console.log(`[PageNumbers] Split on literal \\f, found ${pages.length} pages`);
-    } else if (md.includes('\x0C')) {
+        splitBy = 'literal-f';
+        console.log(`[PageNumbers] Split on literal \\f, found ${pages.length} raw segments`);
+    }
+    // Pattern 3: Actual form feed character (ASCII 12)
+    else if (md.includes('\x0C')) {
         pages = md.split(/\x0C+/);
-        console.log(`[PageNumbers] Split on form feed char, found ${pages.length} pages`);
-    } else if (md.includes('\n---\n')) {
+        splitBy = 'form-feed';
+        console.log(`[PageNumbers] Split on form feed char, found ${pages.length} raw segments`);
+    }
+    // Pattern 4: Horizontal rule
+    else if (md.includes('\n---\n')) {
         pages = md.split('\n---\n');
-        console.log(`[PageNumbers] Split on horizontal rule (---), found ${pages.length} pages`);
-    } else {
+        splitBy = 'horizontal-rule';
+        console.log(`[PageNumbers] Split on horizontal rule (---), found ${pages.length} raw segments`);
+    }
+    else {
         pages = [md];
+        splitBy = 'none';
         console.log('[PageNumbers] No page breaks found, treating as single page');
     }
     
@@ -413,7 +431,7 @@ function insertPageNumbers(md) {
     pages = pages.filter(p => p.trim().length > 0);
     if (pages.length === 0) return md;
     
-    console.log(`[PageNumbers] After filter: ${pages.length} pages, startPage=${startPage}, initialNum=${initialNum}`);
+    console.log(`[PageNumbers] After filter: ${pages.length} pages (split by ${splitBy}), startPage=${startPage}, initialNum=${initialNum}`);
     
     const result = [];
     let currentNum = initialNum;
@@ -421,11 +439,13 @@ function insertPageNumbers(md) {
     pages.forEach((page, index) => {
         const pageNum = index + 1;
         const prefix = (pageNum < startPage) ? '(( ))' : `((${currentNum++}))`;
+        // Remove leading newlines but preserve internal formatting
         const trimmed = page.replace(/^\n+/, '');
-        result.push(prefix + '\n' + trimmed);
+        if (trimmed.length > 0) {
+            result.push(prefix + '\n' + trimmed);
+        }
     });
     
-    // Join with newline (pagebreak \f is replaced by the page number prefix)
     const output = result.join('\n');
     console.log('[PageNumbers] Output preview:', output.substring(0, 300));
     return output;
