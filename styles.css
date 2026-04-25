@@ -1612,42 +1612,6 @@ body {
     min-width: 20px;
 }
 
-/* Crop Overlay */
-.crop-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-}
-
-.crop-rect {
-    position: absolute;
-    border: 2px solid #4f46e5;
-    background: rgba(79, 70, 229, 0.12);
-    cursor: move;
-    pointer-events: auto;
-    display: none;
-    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4);
-}
-
-.crop-handle {
-    position: absolute;
-    width: 16px;
-    height: 16px;
-    background: #4f46e5;
-    border: 2px solid white;
-    border-radius: 50%;
-    pointer-events: auto;
-    z-index: 10;
-}
-
-.crop-handle-nw { top: -8px; left: -8px; cursor: nw-resize; }
-.crop-handle-ne { top: -8px; right: -8px; cursor: ne-resize; }
-.crop-handle-sw { bottom: -8px; left: -8px; cursor: sw-resize; }
-.crop-handle-se { bottom: -8px; right: -8px; cursor: se-resize; }
-
 .crop-action-bar {
     position: absolute;
     bottom: 16px;

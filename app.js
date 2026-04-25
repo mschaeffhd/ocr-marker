@@ -1644,299 +1644,278 @@ let editorState = {
     isDrawing: false,
     lastX: 0,
     lastY: 0,
-    cropActive: false,
-    cropRect: null, // {x, y, w, h} in canvas coords
-    cropDrag: null, // 'move', 'resize-nw', etc.
-    cropDragStart: null, // {x, y, rect}
+    cropRect: null,  // {x, y, w, h} in canvas coords
+    cropMode: null,  // 'create', 'move', 'resize-nw', etc.
+    cropStart: null, // {x, y, rect}
     scale: 1
 };
 
 function openEditor(fname) {
     if (!fname || !state.images[fname]) return;
-    
     editorState.fname = fname;
     editorState.originalB64 = state.images[fname];
     editorState.tool = 'brush';
     editorState.undoStack = [];
-    editorState.cropActive = false;
     editorState.cropRect = null;
-    editorState.cropDrag = null;
+    editorState.cropMode = null;
     editorState.isDrawing = false;
     
-    const modal = $('#imageEditor');
-    if (modal) modal.style.display = 'flex';
+    $('#imageEditor').style.display = 'flex';
+    $('#editorFname').textContent = fname;
+    $('#cropActionBar').style.display = 'none';
     
-    const fnameEl = $('#editorFname');
-    if (fnameEl) fnameEl.textContent = fname;
-    
-    // Reset tool buttons
     document.querySelectorAll('#imageEditor .tool-btn').forEach(b => b.classList.remove('active'));
     $('#toolBrush')?.classList.add('active');
     
-    // Hide crop overlay
-    const cropOverlay = $('#cropOverlay');
-    if (cropOverlay) cropOverlay.style.display = 'none';
-    
-    // Load image onto canvas
     const img = new Image();
     img.onload = function() {
         editorState.canvas = $('#editorCanvas');
-        if (!editorState.canvas) return;
-        
-        // Fit canvas to window
         const maxW = window.innerWidth - 40;
         const maxH = window.innerHeight - 140;
         const scale = Math.min(maxW / img.width, maxH / img.height, 1);
         editorState.scale = scale;
-        
         editorState.canvas.width = Math.round(img.width * scale);
         editorState.canvas.height = Math.round(img.height * scale);
-        
         editorState.ctx = editorState.canvas.getContext('2d');
         editorState.ctx.drawImage(img, 0, 0, editorState.canvas.width, editorState.canvas.height);
-        
-        // Save initial state for undo
         pushUndo();
-        
-        // Setup events
         setupEditorEvents();
     };
     img.src = `data:image/jpeg;base64,${editorState.originalB64}`;
-    
     editorState.open = true;
 }
 
-function closeEditor(discard = true) {
-    const modal = $('#imageEditor');
-    if (modal) modal.style.display = 'none';
-    
+function closeEditor() {
+    $('#imageEditor').style.display = 'none';
     removeEditorEvents();
-    
     editorState.open = false;
-    editorState.cropActive = false;
+    editorState.cropRect = null;
+    editorState.cropMode = null;
     editorState.isDrawing = false;
-    
-    const cropOverlay = $('#cropOverlay');
-    if (cropOverlay) cropOverlay.style.display = 'none';
+    $('#cropActionBar').style.display = 'none';
 }
 
 function setupEditorEvents() {
-    const canvas = editorState.canvas;
-    if (!canvas) return;
-    
-    canvas.addEventListener('mousedown', onEditorMouseDown);
-    canvas.addEventListener('mousemove', onEditorMouseMove);
-    canvas.addEventListener('mouseup', onEditorMouseUp);
-    canvas.addEventListener('mouseleave', onEditorMouseUp);
-    
-    // Touch support
-    canvas.addEventListener('touchstart', onEditorTouchStart, { passive: false });
-    canvas.addEventListener('touchmove', onEditorTouchMove, { passive: false });
-    canvas.addEventListener('touchend', onEditorMouseUp);
-    
-    // Crop overlay events
-    const cropRect = $('#cropRect');
-    if (cropRect) {
-        cropRect.addEventListener('mousedown', onCropRectMouseDown);
-        cropRect.addEventListener('touchstart', (e) => {
-            e.stopPropagation();
-            if (e.touches.length === 1) {
-                const touch = e.touches[0];
-                onCropRectMouseDown({ stopPropagation: () => {}, clientX: touch.clientX, clientY: touch.clientY });
-            }
-        }, { passive: false });
-    }
-    
-    document.querySelectorAll('.crop-handle').forEach(handle => {
-        handle.addEventListener('mousedown', onCropHandleMouseDown);
-        handle.addEventListener('touchstart', (e) => {
-            e.stopPropagation();
-            if (e.touches.length === 1) {
-                const touch = e.touches[0];
-                onCropHandleMouseDown({ stopPropagation: () => {}, target: e.target, clientX: touch.clientX, clientY: touch.clientY });
-            }
-        }, { passive: false });
-    });
+    const c = editorState.canvas;
+    if (!c) return;
+    c.addEventListener('mousedown', onEditDown);
+    c.addEventListener('mousemove', onEditMove);
+    c.addEventListener('mouseup', onEditUp);
+    c.addEventListener('mouseleave', onEditUp);
+    c.addEventListener('touchstart', onEditTouchStart, { passive: false });
+    c.addEventListener('touchmove', onEditTouchMove, { passive: false });
+    c.addEventListener('touchend', onEditUp);
 }
 
 function removeEditorEvents() {
-    const canvas = editorState.canvas;
-    if (!canvas) return;
-    
-    canvas.removeEventListener('mousedown', onEditorMouseDown);
-    canvas.removeEventListener('mousemove', onEditorMouseMove);
-    canvas.removeEventListener('mouseup', onEditorMouseUp);
-    canvas.removeEventListener('mouseleave', onEditorMouseUp);
-    canvas.removeEventListener('touchstart', onEditorTouchStart);
-    canvas.removeEventListener('touchmove', onEditorTouchMove);
-    canvas.removeEventListener('touchend', onEditorMouseUp);
-    
-    const cropRect = $('#cropRect');
-    if (cropRect) {
-        cropRect.removeEventListener('mousedown', onCropRectMouseDown);
-    }
-    
-    document.querySelectorAll('.crop-handle').forEach(handle => {
-        handle.removeEventListener('mousedown', onCropHandleMouseDown);
-    });
+    const c = editorState.canvas;
+    if (!c) return;
+    c.removeEventListener('mousedown', onEditDown);
+    c.removeEventListener('mousemove', onEditMove);
+    c.removeEventListener('mouseup', onEditUp);
+    c.removeEventListener('mouseleave', onEditUp);
+    c.removeEventListener('touchstart', onEditTouchStart);
+    c.removeEventListener('touchmove', onEditTouchMove);
+    c.removeEventListener('touchend', onEditUp);
 }
 
-function getCanvasCoords(e) {
+function getCanvasPos(e) {
     const rect = editorState.canvas.getBoundingClientRect();
-    const scaleX = editorState.canvas.width / rect.width;
-    const scaleY = editorState.canvas.height / rect.height;
-    return {
-        x: (e.clientX - rect.left) * scaleX,
-        y: (e.clientY - rect.top) * scaleY
-    };
+    const sx = editorState.canvas.width / rect.width;
+    const sy = editorState.canvas.height / rect.height;
+    return { x: (e.clientX - rect.left) * sx, y: (e.clientY - rect.top) * sy };
 }
 
-function onEditorMouseDown(e) {
+function isInCrop(x, y) {
+    const r = editorState.cropRect;
+    return r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+}
+
+function getCropHandle(x, y) {
+    const r = editorState.cropRect, hs = 12;
+    if (!r) return null;
+    const checks = [
+        { h: 'nw', x: r.x, y: r.y },
+        { h: 'ne', x: r.x + r.w, y: r.y },
+        { h: 'sw', x: r.x, y: r.y + r.h },
+        { h: 'se', x: r.x + r.w, y: r.y + r.h }
+    ];
+    for (const c of checks) {
+        if (Math.abs(x - c.x) < hs && Math.abs(y - c.y) < hs) return c.h;
+    }
+    return null;
+}
+
+function drawCropOverlay() {
+    const ctx = editorState.ctx;
+    const r = editorState.cropRect;
+    if (!r || !ctx) return;
+    // Semi-transparent dark overlay outside crop
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(0, 0, editorState.canvas.width, r.y);
+    ctx.fillRect(0, r.y + r.h, editorState.canvas.width, editorState.canvas.height - r.y - r.h);
+    ctx.fillRect(0, r.y, r.x, r.h);
+    ctx.fillRect(r.x + r.w, r.y, editorState.canvas.width - r.x - r.w, r.h);
+    // Crop border
+    ctx.strokeStyle = '#4f46e5';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    ctx.setLineDash([]);
+    // Handles
+    ctx.fillStyle = '#4f46e5';
+    const s = 8;
+    [[r.x, r.y], [r.x+r.w, r.y], [r.x, r.y+r.h], [r.x+r.w, r.y+r.h]].forEach(([hx, hy]) => {
+        ctx.fillRect(hx-s, hy-s, s*2, s*2);
+    });
+    ctx.restore();
+}
+
+function redrawCanvas() {
+    const cvs = editorState.canvas;
+    if (!cvs || editorState.undoStack.length === 0) return;
+    const img = new Image();
+    img.onload = () => {
+        editorState.ctx.clearRect(0, 0, cvs.width, cvs.height);
+        editorState.ctx.drawImage(img, 0, 0);
+        if (editorState.cropRect) drawCropOverlay();
+    };
+    img.src = editorState.undoStack[editorState.undoStack.length - 1];
+}
+
+function onEditDown(e) {
     if (!editorState.open) return;
-    
-    // Ignore if clicking on crop handles or crop rect (they have their own handlers)
-    if (e.target.closest('.crop-handle') || e.target.closest('.crop-rect')) return;
-    
     e.preventDefault();
-    const coords = getCanvasCoords(e);
+    const p = getCanvasPos(e);
     editorState.isDrawing = true;
-    editorState.lastX = coords.x;
-    editorState.lastY = coords.y;
+    editorState.lastX = p.x;
+    editorState.lastY = p.y;
     
     if (editorState.tool === 'crop') {
-        // Start new crop selection
-        editorState.cropRect = { x: coords.x, y: coords.y, w: 0, h: 0 };
-        editorState.cropDrag = 'create';
-        showCropOverlay();
-        updateCropDOM();
+        const handle = getCropHandle(p.x, p.y);
+        if (handle) {
+            editorState.cropMode = 'resize-' + handle;
+            editorState.cropStart = { x: p.x, y: p.y, rect: { ...editorState.cropRect } };
+        } else if (isInCrop(p.x, p.y)) {
+            editorState.cropMode = 'move';
+            editorState.cropStart = { x: p.x, y: p.y, rect: { ...editorState.cropRect } };
+        } else {
+            editorState.cropRect = { x: p.x, y: p.y, w: 0, h: 0 };
+            editorState.cropMode = 'create';
+        }
+        $('#cropActionBar').style.display = 'none';
     } else if (editorState.tool === 'eyedropper') {
-        pickColor(coords.x, coords.y);
+        const px = editorState.ctx.getImageData(p.x, p.y, 1, 1).data;
+        const hex = '#' + [px[0], px[1], px[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+        $('#brushColor').value = hex;
+        setEditorTool('brush');
+        showToast('Farbe: ' + hex, 'info');
     } else if (editorState.tool === 'brush') {
-        drawBrush(coords.x, coords.y, coords.x, coords.y);
+        const sz = parseInt($('#brushSize')?.value || 10);
+        const col = $('#brushColor')?.value || '#ff0000';
+        editorState.ctx.beginPath();
+        editorState.ctx.arc(p.x, p.y, sz/2, 0, Math.PI*2);
+        editorState.ctx.fillStyle = col;
+        editorState.ctx.fill();
     }
 }
 
-function onEditorMouseMove(e) {
+function onEditMove(e) {
     if (!editorState.open || !editorState.isDrawing) return;
     e.preventDefault();
+    const p = getCanvasPos(e);
+    const cvs = editorState.canvas;
     
-    const coords = getCanvasCoords(e);
-    
-    if (editorState.tool === 'crop' && editorState.cropDrag) {
-        const cvs = editorState.canvas;
-        if (editorState.cropDrag === 'create') {
-            const x1 = Math.min(editorState.lastX, coords.x);
-            const y1 = Math.min(editorState.lastY, coords.y);
-            const x2 = Math.max(editorState.lastX, coords.x);
-            const y2 = Math.max(editorState.lastY, coords.y);
+    if (editorState.tool === 'crop' && editorState.cropMode) {
+        const r = editorState.cropRect;
+        if (editorState.cropMode === 'create') {
+            const x1 = Math.min(editorState.lastX, p.x);
+            const y1 = Math.min(editorState.lastY, p.y);
             editorState.cropRect = {
                 x: x1, y: y1,
-                w: Math.min(x2 - x1, cvs.width - x1),
-                h: Math.min(y2 - y1, cvs.height - y1)
+                w: Math.min(Math.abs(p.x - editorState.lastX), cvs.width - x1),
+                h: Math.min(Math.abs(p.y - editorState.lastY), cvs.height - y1)
             };
-        } else if (editorState.cropDrag === 'move' && editorState.cropDragStart) {
-            const dx = coords.x - editorState.cropDragStart.x;
-            const dy = coords.y - editorState.cropDragStart.y;
-            const r = editorState.cropDragStart.rect;
+        } else if (editorState.cropMode === 'move' && editorState.cropStart) {
+            const dx = p.x - editorState.cropStart.x;
+            const dy = p.y - editorState.cropStart.y;
+            const sr = editorState.cropStart.rect;
             editorState.cropRect = {
-                x: Math.max(0, Math.min(r.x + dx, cvs.width - r.w)),
-                y: Math.max(0, Math.min(r.y + dy, cvs.height - r.h)),
-                w: r.w, h: r.h
+                x: Math.max(0, Math.min(sr.x + dx, cvs.width - sr.w)),
+                y: Math.max(0, Math.min(sr.y + dy, cvs.height - sr.h)),
+                w: sr.w, h: sr.h
             };
-        } else if (editorState.cropDrag && editorState.cropDrag.startsWith('resize-') && editorState.cropDragStart) {
-            const r = editorState.cropDragStart.rect;
-            const dir = editorState.cropDrag.replace('resize-', '');
-            let x = r.x, y = r.y, w = r.w, h = r.h;
-            
-            if (dir.includes('e')) w = Math.max(20, coords.x - r.x);
-            if (dir.includes('w')) {
-                const newX = Math.min(coords.x, r.x + r.w - 20);
-                w = r.x + r.w - newX;
-                x = newX;
-            }
-            if (dir.includes('s')) h = Math.max(20, coords.y - r.y);
-            if (dir.includes('n')) {
-                const newY = Math.min(coords.y, r.y + r.h - 20);
-                h = r.y + r.h - newY;
-                y = newY;
-            }
+        } else if (editorState.cropMode.startsWith('resize-') && editorState.cropStart) {
+            const sr = editorState.cropStart.rect;
+            const dir = editorState.cropMode.replace('resize-', '');
+            let x=sr.x, y=sr.y, w=sr.w, h=sr.h;
+            if (dir.includes('e')) w = Math.max(20, p.x - sr.x);
+            if (dir.includes('w')) { const nx = Math.min(p.x, sr.x+sr.w-20); w = sr.x+sr.w-nx; x = nx; }
+            if (dir.includes('s')) h = Math.max(20, p.y - sr.y);
+            if (dir.includes('n')) { const ny = Math.min(p.y, sr.y+sr.h-20); h = sr.y+sr.h-ny; y = ny; }
             editorState.cropRect = { x, y, w, h };
         }
-        updateCropDOM();
+        redrawCanvas();
     } else if (editorState.tool === 'brush') {
-        drawBrush(editorState.lastX, editorState.lastY, coords.x, coords.y);
-        editorState.lastX = coords.x;
-        editorState.lastY = coords.y;
+        const sz = parseInt($('#brushSize')?.value || 10);
+        const col = $('#brushColor')?.value || '#ff0000';
+        editorState.ctx.lineCap = 'round';
+        editorState.ctx.lineJoin = 'round';
+        editorState.ctx.lineWidth = sz;
+        editorState.ctx.strokeStyle = col;
+        editorState.ctx.beginPath();
+        editorState.ctx.moveTo(editorState.lastX, editorState.lastY);
+        editorState.ctx.lineTo(p.x, p.y);
+        editorState.ctx.stroke();
+        editorState.lastX = p.x;
+        editorState.lastY = p.y;
     }
 }
 
-function onEditorMouseUp(e) {
+function onEditUp(e) {
     if (!editorState.open || !editorState.isDrawing) return;
-    
     editorState.isDrawing = false;
-    editorState.cropDrag = null;
-    editorState.cropDragStart = null;
-    
-    if (editorState.tool === 'brush') {
-        pushUndo();
+    if (editorState.tool === 'brush') pushUndo();
+    if (editorState.tool === 'crop' && editorState.cropRect && editorState.cropRect.w > 20 && editorState.cropRect.h > 20) {
+        $('#cropActionBar').style.display = 'flex';
+    }
+    editorState.cropMode = null;
+    editorState.cropStart = null;
+}
+
+function onEditTouchStart(e) {
+    e.preventDefault();
+    if (e.touches.length === 1) {
+        const t = e.touches[0];
+        onEditDown({ preventDefault: () => {}, clientX: t.clientX, clientY: t.clientY });
     }
 }
 
-function onEditorTouchStart(e) {
+function onEditTouchMove(e) {
     e.preventDefault();
     if (e.touches.length === 1) {
-        const touch = e.touches[0];
-        onEditorMouseDown({ clientX: touch.clientX, clientY: touch.clientY, preventDefault: () => {} });
-    }
-}
-
-function onEditorTouchMove(e) {
-    e.preventDefault();
-    if (e.touches.length === 1) {
-        const touch = e.touches[0];
-        onEditorMouseMove({ clientX: touch.clientX, clientY: touch.clientY, preventDefault: () => {} });
+        const t = e.touches[0];
+        onEditMove({ preventDefault: () => {}, clientX: t.clientX, clientY: t.clientY });
     }
 }
 
 function drawBrush(x1, y1, x2, y2) {
     const ctx = editorState.ctx;
     if (!ctx) return;
-    
-    const size = parseInt($('#brushSize')?.value || 10);
-    const color = $('#brushColor')?.value || '#ff0000';
-    
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.lineWidth = size;
-    ctx.strokeStyle = color;
-    
+    ctx.lineWidth = parseInt($('#brushSize')?.value || 10);
+    ctx.strokeStyle = $('#brushColor')?.value || '#ff0000';
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
     ctx.stroke();
 }
 
-function pickColor(x, y) {
-    const ctx = editorState.ctx;
-    if (!ctx) return;
-    
-    const pixel = ctx.getImageData(x, y, 1, 1).data;
-    const hex = '#' + [pixel[0], pixel[1], pixel[2]].map(v => v.toString(16).padStart(2, '0')).join('');
-    
-    const colorInput = $('#brushColor');
-    if (colorInput) colorInput.value = hex;
-    
-    // Auto-switch to brush
-    setEditorTool('brush');
-    showToast(`Farbe: ${hex}`, 'info');
-}
-
 function pushUndo() {
     if (!editorState.canvas) return;
-    // Limit stack size
-    if (editorState.undoStack.length > 20) {
-        editorState.undoStack.shift();
-    }
+    if (editorState.undoStack.length > 20) editorState.undoStack.shift();
     editorState.undoStack.push(editorState.canvas.toDataURL('image/jpeg', 0.95));
 }
 
@@ -1945,228 +1924,94 @@ function undoEditor() {
         showToast('Nichts zum Rückgängig machen', 'info');
         return;
     }
-    
-    // Remove current state
     editorState.undoStack.pop();
-    // Restore previous state
-    const prevState = editorState.undoStack[editorState.undoStack.length - 1];
-    
     const img = new Image();
-    img.onload = function() {
+    img.onload = () => {
         editorState.ctx.clearRect(0, 0, editorState.canvas.width, editorState.canvas.height);
         editorState.ctx.drawImage(img, 0, 0);
     };
-    img.src = prevState;
+    img.src = editorState.undoStack[editorState.undoStack.length - 1];
 }
 
 function setEditorTool(tool) {
     editorState.tool = tool;
-    editorState.cropActive = (tool === 'crop');
-    
     document.querySelectorAll('#imageEditor .tool-btn').forEach(b => b.classList.remove('active'));
-    
     if (tool === 'crop') $('#toolCrop')?.classList.add('active');
     else if (tool === 'brush') $('#toolBrush')?.classList.add('active');
     else if (tool === 'eyedropper') $('#toolEyedropper')?.classList.add('active');
     
-    // Update cursor
-    if (editorState.canvas) {
-        editorState.canvas.style.cursor = (tool === 'crop') ? 'crosshair' : 'crosshair';
+    if (tool !== 'crop') {
+        editorState.cropRect = null;
+        $('#cropActionBar').style.display = 'none';
+        redrawCanvas();
+    } else if (editorState.cropRect) {
+        redrawCanvas();
+        $('#cropActionBar').style.display = 'flex';
     }
-    
-    // Show/hide crop overlay
-    if (tool === 'crop') {
-        showCropOverlay();
-    } else {
-        hideCropOverlay();
-    }
-}
-
-// Crop overlay helpers
-function showCropOverlay() {
-    const overlay = $('#cropOverlay');
-    if (overlay) overlay.style.display = 'block';
-    if (editorState.cropRect) {
-        updateCropDOM();
-    }
-}
-
-function hideCropOverlay() {
-    const overlay = $('#cropOverlay');
-    const actionBar = $('#cropActionBar');
-    if (overlay) overlay.style.display = 'none';
-    if (actionBar) actionBar.style.display = 'none';
-}
-
-function updateCropDOM() {
-    const rect = $('#cropRect');
-    const actionBar = $('#cropActionBar');
-    if (!rect || !editorState.canvas || !editorState.cropRect) return;
-    
-    const canvasRect = editorState.canvas.getBoundingClientRect();
-    const containerRect = editorState.canvas.parentElement.getBoundingClientRect();
-    
-    const scaleX = canvasRect.width / editorState.canvas.width;
-    const scaleY = canvasRect.height / editorState.canvas.height;
-    
-    const r = editorState.cropRect;
-    const left = r.x * scaleX + (canvasRect.left - containerRect.left);
-    const top = r.y * scaleY + (canvasRect.top - containerRect.top);
-    const width = r.w * scaleX;
-    const height = r.h * scaleY;
-    
-    rect.style.left = left + 'px';
-    rect.style.top = top + 'px';
-    rect.style.width = width + 'px';
-    rect.style.height = height + 'px';
-    rect.style.display = 'block';
-    
-    if (actionBar && r.w > 20 && r.h > 20) {
-        actionBar.style.display = 'flex';
-    }
-}
-
-// Crop rect drag (move)
-function onCropRectMouseDown(e) {
-    e.stopPropagation();
-    if (!editorState.open) return;
-    const coords = getCanvasCoords(e);
-    editorState.isDrawing = true;
-    editorState.cropDrag = 'move';
-    editorState.cropDragStart = { x: coords.x, y: coords.y, rect: { ...editorState.cropRect } };
-}
-
-// Crop handle drag (resize)
-function onCropHandleMouseDown(e) {
-    e.stopPropagation();
-    if (!editorState.open) return;
-    const handle = e.target.dataset.handle;
-    const coords = getCanvasCoords(e);
-    editorState.isDrawing = true;
-    editorState.cropDrag = 'resize-' + handle;
-    editorState.cropDragStart = { x: coords.x, y: coords.y, rect: { ...editorState.cropRect } };
 }
 
 function applyCrop() {
     if (!editorState.cropRect || !editorState.canvas) return;
-    
     const r = editorState.cropRect;
-    if (r.w < 10 || r.h < 10) {
-        showToast('Bereich zu klein', 'error');
-        return;
-    }
-    
-    // Extract cropped region
-    const imageData = editorState.ctx.getImageData(r.x, r.y, r.w, r.h);
-    
-    // Create new canvas with cropped size
-    const newCanvas = document.createElement('canvas');
-    newCanvas.width = r.w;
-    newCanvas.height = r.h;
-    const newCtx = newCanvas.getContext('2d');
-    newCtx.putImageData(imageData, 0, 0);
-    
-    // Replace main canvas
+    if (r.w < 10 || r.h < 10) { showToast('Bereich zu klein', 'error'); return; }
+    const data = editorState.ctx.getImageData(r.x, r.y, r.w, r.h);
+    const nc = document.createElement('canvas');
+    nc.width = r.w; nc.height = r.h;
+    nc.getContext('2d').putImageData(data, 0, 0);
     editorState.canvas.width = r.w;
     editorState.canvas.height = r.h;
     editorState.ctx.clearRect(0, 0, r.w, r.h);
-    editorState.ctx.drawImage(newCanvas, 0, 0);
-    
-    pushUndo();
-    
-    // Hide crop overlay
-    hideCropOverlay();
+    editorState.ctx.drawImage(nc, 0, 0);
     editorState.cropRect = null;
-    
+    $('#cropActionBar').style.display = 'none';
+    pushUndo();
     showToast('Bild zugeschnitten', 'success');
 }
 
 function saveEditor() {
     if (!editorState.canvas || !editorState.fname) return;
-    
-    const dataUrl = editorState.canvas.toDataURL('image/jpeg', 0.95);
-    const cleanB64 = dataUrl.replace(/^data:image\/jpeg;base64,/, '');
-    
-    // Update state
-    state.images[editorState.fname] = cleanB64;
-    
-    // Update comparison view
+    const b64 = editorState.canvas.toDataURL('image/jpeg', 0.95).replace(/^data:image\/jpeg;base64,/, '');
+    state.images[editorState.fname] = b64;
     comparePageMap = buildComparePageMap();
-    if (compareViewOpen) {
-        renderComparePage();
-    }
-    
-    // Update markdown preview
+    if (compareViewOpen) renderComparePage();
     renderMarkdown(state.markdown);
-    
     showToast('Bild gespeichert. Starte KI-Neu...', 'success');
-    
-    closeEditor(false);
-    
-    // Trigger re-description
-    reDescribeImage(editorState.fname);
+    const fn = editorState.fname;
+    closeEditor();
+    reDescribeImage(fn);
 }
 
 function handleSwapFile(file) {
     if (!file || !file.type.startsWith('image/')) return;
-    
     const reader = new FileReader();
-    reader.onload = function(e) {
-        const dataUrl = e.target.result;
-        const cleanB64 = dataUrl.replace(/^data:image\/[^;]+;base64,/, '');
-        
-        state.images[editorState.fname] = cleanB64;
-        
-        // Reload editor with new image
+    reader.onload = (e) => {
+        const b64 = e.target.result.replace(/^data:image\/[^;]+;base64,/, '');
+        state.images[editorState.fname] = b64;
         openEditor(editorState.fname);
-        
         showToast('Bild ausgetauscht!', 'success');
     };
     reader.readAsDataURL(file);
 }
 
-// Editor Event Listeners
+// Editor toolbar listeners
 on('#toolCrop', 'click', () => setEditorTool('crop'));
 on('#toolBrush', 'click', () => setEditorTool('brush'));
 on('#toolEyedropper', 'click', () => setEditorTool('eyedropper'));
 on('#toolUndo', 'click', undoEditor);
-on('#toolReset', 'click', () => {
-    if (editorState.originalB64) {
-        openEditor(editorState.fname);
-        showToast('Zurückgesetzt', 'info');
-    }
-});
-on('#toolCancel', 'click', () => closeEditor(true));
-on('#editorCloseX', 'click', () => closeEditor(true));
+on('#toolReset', 'click', () => { if (editorState.fname) openEditor(editorState.fname); });
+on('#toolCancel', 'click', () => closeEditor());
+on('#editorCloseX', 'click', () => closeEditor());
 on('#toolFinish', 'click', saveEditor);
 on('#toolSwap', 'click', () => $('#swapFileInput')?.click());
-on('#swapFileInput', 'change', (e) => {
-    if (e.target.files.length > 0) {
-        handleSwapFile(e.target.files[0]);
-        e.target.value = '';
-    }
-});
+on('#swapFileInput', 'change', (e) => { if (e.target.files[0]) { handleSwapFile(e.target.files[0]); e.target.value = ''; } });
 on('#cropApply', 'click', applyCrop);
-on('#cropCancel', 'click', () => {
-    hideCropOverlay();
-    editorState.cropRect = null;
-    editorState.cropDrag = null;
-    editorState.cropDragStart = null;
-});
-on('#brushSize', 'input', (e) => {
-    const val = $('#brushSizeVal');
-    if (val) val.textContent = e.target.value;
-});
+on('#cropCancel', 'click', () => { editorState.cropRect = null; $('#cropActionBar').style.display = 'none'; redrawCanvas(); });
+on('#brushSize', 'input', (e) => { const v = $('#brushSizeVal'); if (v) v.textContent = e.target.value; });
 
-// Keyboard: Escape to close, Ctrl+Z to undo
 document.addEventListener('keydown', (e) => {
     if (!editorState.open) return;
-    if (e.key === 'Escape') {
-        closeEditor(true);
-    } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        e.preventDefault();
-        undoEditor();
-    }
+    if (e.key === 'Escape') closeEditor();
+    else if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undoEditor(); }
 });
 
 // ===== Comparison View Functions =====
