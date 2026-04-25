@@ -645,11 +645,14 @@ async function createZipArchive() {
     const content = await zip.generateAsync({ type: 'blob' });
     state.zipBlob = content;
     
-    // Update summary safely
+    // Update summary safely (ZIP only visible for Markdown output)
+    const isJsonOutput = outputFormat === 'json';
     safeText('#zipStatus', 'Erstellt');
-    safeStyle('#uploadSummary', 'display', 'inline');
-    safeStyle('#uploadDivider', 'display', 'inline');
-    safeStyle('#btnDownloadZip', 'display', 'inline-flex');
+    if (!isJsonOutput) {
+        safeStyle('#uploadSummary', 'display', 'inline');
+        safeStyle('#uploadDivider', 'display', 'inline');
+        safeStyle('#btnDownloadZip', 'display', 'inline-flex');
+    }
     
     addLog('conversionLog', `ZIP-Archiv fertiggestellt mit ${imageCount} Bildern`, 'success');
     
@@ -1335,6 +1338,7 @@ function updateOutputFormatUI() {
     const btnDocx = $('#btnDownloadDocx');
     const btnMd = $('#btnDownloadMd');
     const btnCopy = $('#btnCopyMd');
+    const btnZip = $('#btnDownloadZip');
     const exportPanel = $('#exportPanel');
     
     if (btnDocx) {
@@ -1345,6 +1349,9 @@ function updateOutputFormatUI() {
     }
     if (btnCopy) {
         btnCopy.textContent = isJson ? '📋 Kopieren' : '📋 Kopieren';
+    }
+    if (btnZip) {
+        btnZip.style.display = isJson ? 'none' : '';
     }
     if (exportPanel) {
         exportPanel.style.display = isJson ? 'none' : '';
