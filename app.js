@@ -386,48 +386,49 @@ function insertPageNumbers(md) {
     const showNums = $('#showPageNumbers')?.checked ?? true;
     if (!showNums) return md;
     
-    const startPage = parseInt($('#pageNumberStart')?.value || '1', 10);
-    const initialNum = parseInt($('#pageNumberInitial')?.value || '1', 10);
+    const startPage = parseInt($('#pageNumberStart')?.value || '1', 10) || 1;
+    const initialNum = parseInt($('#pageNumberInitial')?.value || '1', 10) || 0;
     
-    // Robust split: match horizontal rules with various newline patterns
-    // Marker may output --- with different surrounding whitespace
-    // Patterns: \n---\n, \n\n---\n\n, ^---\n, \n---$
-    const pages = md.split(/\n*\n---\n*\n?/);
-    if (pages.length <= 1) {
-        console.log('[PageNumbers] No page breaks found, single page');
-        // Even single page gets a number if it has content
-        const trimmed = md.replace(/^\n+/, '');
-        if (trimmed.length > 0) {
-            return '((1))\n' + trimmed;
-        }
-        return md;
+    // Detect page break separator used by marker
+    // Marker with paginate_output uses \f (form feed, ASCII 12)
+    // Some outputs may use --- (horizontal rule)
+    let pages = [];
+    let separator = '\n';
+    
+    if (md.includes('\f')) {
+        // Form feed is the marker paginate_output separator
+        pages = md.split(/\f+/);
+        separator = '\f';
+        console.log(`[PageNumbers] Split on FORM FEED (\\f), found ${pages.length} pages`);
+    } else if (md.includes('\n---\n')) {
+        pages = md.split('\n---\n');
+        separator = '\n---\n';
+        console.log(`[PageNumbers] Split on horizontal rule (---), found ${pages.length} pages`);
+    } else {
+        // No page breaks found - treat as single page
+        pages = [md];
+        console.log('[PageNumbers] No page breaks found, treating as single page');
     }
     
-    console.log(`[PageNumbers] Found ${pages.length} pages, start=${startPage}, initial=${initialNum}`);
+    // Filter out empty pages (trailing separators can create empty strings)
+    pages = pages.filter(p => p.trim().length > 0);
+    
+    if (pages.length === 0) return md;
+    
+    console.log(`[PageNumbers] After filter: ${pages.length} pages, startPage=${startPage}, initialNum=${initialNum}`);
     
     const result = [];
     let currentNum = initialNum;
     
     pages.forEach((page, index) => {
-        const pageNum = index + 1;
-        let prefix;
-        if (pageNum < startPage) {
-            prefix = '(( ))';
-        } else {
-            prefix = `((${currentNum}))`;
-            currentNum++;
-        }
-        
+        const pageNum = index + 1; // 1-based page index
+        const prefix = (pageNum < startPage) ? '(( ))' : `((${currentNum++}))`;
         const trimmed = page.replace(/^\n+/, '');
-        if (trimmed.length > 0 || pages.length === 1) {
-            result.push(prefix + '\n' + trimmed);
-        } else {
-            result.push(prefix);
-        }
+        result.push(prefix + '\n' + trimmed);
     });
     
-    const output = result.join('\n---\n');
-    console.log('[PageNumbers] Output preview:', output.substring(0, 200));
+    const output = result.join(separator);
+    console.log('[PageNumbers] Output preview:', output.substring(0, 250));
     return output;
 }
 
