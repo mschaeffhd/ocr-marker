@@ -867,11 +867,8 @@ async function renderPdfPreview(file) {
     }
 }
 
-// Render a single PDF page on demand (for comparison view)
+// Render a single PDF page on demand (for comparison view) - always HD, no thumbnail cache overwrite
 async function renderPdfPageOnDemand(pageNum) {
-    // Already cached (but invalidate if HQ mode changed)
-    if (pdfPageImages[pageNum] && !compareHqMode) return pdfPageImages[pageNum];
-    
     // Try to reload PDF document if lost
     if (!pdfDocument && pdfArrayBuffer) {
         try {
@@ -889,8 +886,7 @@ async function renderPdfPageOnDemand(pageNum) {
     
     try {
         const page = await pdfDocument.getPage(pageNum);
-        const scale = compareHqMode ? 2.0 : 2.0;
-        const viewport = page.getViewport({ scale: scale });
+        const viewport = page.getViewport({ scale: 2.0 });
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         canvas.width = viewport.width;
@@ -898,9 +894,7 @@ async function renderPdfPageOnDemand(pageNum) {
         
         await page.render({ canvasContext: ctx, viewport: viewport }).promise;
         
-        const base64 = canvas.toDataURL('image/jpeg', 0.9);
-        pdfPageImages[pageNum] = base64;
-        return base64;
+        return canvas.toDataURL('image/jpeg', 0.9);
     } catch (err) {
         console.error(`Failed to render page ${pageNum}:`, err);
         return null;
@@ -1638,6 +1632,442 @@ if (apiField && !apiField.value) {
     }, 600);
 }
 
+// ===== Image Editor (Canvas-based) =====
+let editorState = {
+    open: false,
+    fname: null,
+    originalB64: null,
+    canvas: null,
+    ctx: null,
+    undoStack: [],
+    tool: 'brush',
+    isDrawing: false,
+    lastX: 0,
+    lastY: 0,
+    cropActive: false,
+    cropStart: null,
+    cropEnd: null,
+    scale: 1
+};
+
+function openEditor(fname) {
+    if (!fname || !state.images[fname]) return;
+    
+    editorState.fname = fname;
+    editorState.originalB64 = state.images[fname];
+    editorState.tool = 'brush';
+    editorState.undoStack = [];
+    editorState.cropActive = false;
+    editorState.isDrawing = false;
+    
+    const modal = $('#imageEditor');
+    if (modal) modal.style.display = 'flex';
+    
+    const fnameEl = $('#editorFname');
+    if (fnameEl) fnameEl.textContent = fname;
+    
+    // Reset tool buttons
+    document.querySelectorAll('#imageEditor .tool-btn').forEach(b => b.classList.remove('active'));
+    $('#toolBrush')?.classList.add('active');
+    
+    // Hide crop overlay
+    const cropOverlay = $('#cropOverlay');
+    if (cropOverlay) cropOverlay.style.display = 'none';
+    
+    // Load image onto canvas
+    const img = new Image();
+    img.onload = function() {
+        editorState.canvas = $('#editorCanvas');
+        if (!editorState.canvas) return;
+        
+        // Fit canvas to window
+        const maxW = window.innerWidth - 40;
+        const maxH = window.innerHeight - 140;
+        const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+        editorState.scale = scale;
+        
+        editorState.canvas.width = Math.round(img.width * scale);
+        editorState.canvas.height = Math.round(img.height * scale);
+        
+        editorState.ctx = editorState.canvas.getContext('2d');
+        editorState.ctx.drawImage(img, 0, 0, editorState.canvas.width, editorState.canvas.height);
+        
+        // Save initial state for undo
+        pushUndo();
+        
+        // Setup events
+        setupEditorEvents();
+    };
+    img.src = `data:image/jpeg;base64,${editorState.originalB64}`;
+    
+    editorState.open = true;
+}
+
+function closeEditor(discard = true) {
+    const modal = $('#imageEditor');
+    if (modal) modal.style.display = 'none';
+    
+    removeEditorEvents();
+    
+    editorState.open = false;
+    editorState.cropActive = false;
+    editorState.isDrawing = false;
+    
+    const cropOverlay = $('#cropOverlay');
+    if (cropOverlay) cropOverlay.style.display = 'none';
+}
+
+function setupEditorEvents() {
+    const canvas = editorState.canvas;
+    if (!canvas) return;
+    
+    canvas.addEventListener('mousedown', onEditorMouseDown);
+    canvas.addEventListener('mousemove', onEditorMouseMove);
+    canvas.addEventListener('mouseup', onEditorMouseUp);
+    canvas.addEventListener('mouseleave', onEditorMouseUp);
+    
+    // Touch support
+    canvas.addEventListener('touchstart', onEditorTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onEditorTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onEditorMouseUp);
+}
+
+function removeEditorEvents() {
+    const canvas = editorState.canvas;
+    if (!canvas) return;
+    
+    canvas.removeEventListener('mousedown', onEditorMouseDown);
+    canvas.removeEventListener('mousemove', onEditorMouseMove);
+    canvas.removeEventListener('mouseup', onEditorMouseUp);
+    canvas.removeEventListener('mouseleave', onEditorMouseUp);
+    canvas.removeEventListener('touchstart', onEditorTouchStart);
+    canvas.removeEventListener('touchmove', onEditorTouchMove);
+    canvas.removeEventListener('touchend', onEditorMouseUp);
+}
+
+function getCanvasCoords(e) {
+    const rect = editorState.canvas.getBoundingClientRect();
+    const scaleX = editorState.canvas.width / rect.width;
+    const scaleY = editorState.canvas.height / rect.height;
+    return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+    };
+}
+
+function onEditorMouseDown(e) {
+    if (!editorState.open) return;
+    e.preventDefault();
+    
+    const coords = getCanvasCoords(e);
+    editorState.isDrawing = true;
+    editorState.lastX = coords.x;
+    editorState.lastY = coords.y;
+    
+    if (editorState.tool === 'crop') {
+        editorState.cropStart = coords;
+        editorState.cropEnd = coords;
+        showCropRect(coords, coords);
+    } else if (editorState.tool === 'eyedropper') {
+        pickColor(coords.x, coords.y);
+    } else if (editorState.tool === 'brush') {
+        // Draw single dot
+        drawBrush(coords.x, coords.y, coords.x, coords.y);
+    }
+}
+
+function onEditorMouseMove(e) {
+    if (!editorState.open || !editorState.isDrawing) return;
+    e.preventDefault();
+    
+    const coords = getCanvasCoords(e);
+    
+    if (editorState.tool === 'crop') {
+        editorState.cropEnd = coords;
+        updateCropRect(editorState.cropStart, coords);
+    } else if (editorState.tool === 'brush') {
+        drawBrush(editorState.lastX, editorState.lastY, coords.x, coords.y);
+        editorState.lastX = coords.x;
+        editorState.lastY = coords.y;
+    }
+}
+
+function onEditorMouseUp(e) {
+    if (!editorState.open || !editorState.isDrawing) return;
+    
+    editorState.isDrawing = false;
+    
+    if (editorState.tool === 'brush') {
+        pushUndo();
+    }
+}
+
+function onEditorTouchStart(e) {
+    e.preventDefault();
+    if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        onEditorMouseDown({ clientX: touch.clientX, clientY: touch.clientY, preventDefault: () => {} });
+    }
+}
+
+function onEditorTouchMove(e) {
+    e.preventDefault();
+    if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        onEditorMouseMove({ clientX: touch.clientX, clientY: touch.clientY, preventDefault: () => {} });
+    }
+}
+
+function drawBrush(x1, y1, x2, y2) {
+    const ctx = editorState.ctx;
+    if (!ctx) return;
+    
+    const size = parseInt($('#brushSize')?.value || 10);
+    const color = $('#brushColor')?.value || '#ff0000';
+    
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = size;
+    ctx.strokeStyle = color;
+    
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+}
+
+function pickColor(x, y) {
+    const ctx = editorState.ctx;
+    if (!ctx) return;
+    
+    const pixel = ctx.getImageData(x, y, 1, 1).data;
+    const hex = '#' + [pixel[0], pixel[1], pixel[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+    
+    const colorInput = $('#brushColor');
+    if (colorInput) colorInput.value = hex;
+    
+    // Auto-switch to brush
+    setEditorTool('brush');
+    showToast(`Farbe: ${hex}`, 'info');
+}
+
+function pushUndo() {
+    if (!editorState.canvas) return;
+    // Limit stack size
+    if (editorState.undoStack.length > 20) {
+        editorState.undoStack.shift();
+    }
+    editorState.undoStack.push(editorState.canvas.toDataURL('image/jpeg', 0.95));
+}
+
+function undoEditor() {
+    if (editorState.undoStack.length <= 1) {
+        showToast('Nichts zum Rückgängig machen', 'info');
+        return;
+    }
+    
+    // Remove current state
+    editorState.undoStack.pop();
+    // Restore previous state
+    const prevState = editorState.undoStack[editorState.undoStack.length - 1];
+    
+    const img = new Image();
+    img.onload = function() {
+        editorState.ctx.clearRect(0, 0, editorState.canvas.width, editorState.canvas.height);
+        editorState.ctx.drawImage(img, 0, 0);
+    };
+    img.src = prevState;
+}
+
+function setEditorTool(tool) {
+    editorState.tool = tool;
+    editorState.cropActive = (tool === 'crop');
+    
+    document.querySelectorAll('#imageEditor .tool-btn').forEach(b => b.classList.remove('active'));
+    
+    if (tool === 'crop') $('#toolCrop')?.classList.add('active');
+    else if (tool === 'brush') $('#toolBrush')?.classList.add('active');
+    else if (tool === 'eyedropper') $('#toolEyedropper')?.classList.add('active');
+    
+    // Update cursor
+    if (editorState.canvas) {
+        if (tool === 'eyedropper') editorState.canvas.style.cursor = 'crosshair';
+        else if (tool === 'crop') editorState.canvas.style.cursor = 'crosshair';
+        else editorState.canvas.style.cursor = 'crosshair';
+    }
+    
+    // Hide crop overlay if not crop
+    if (tool !== 'crop') {
+        const cropOverlay = $('#cropOverlay');
+        if (cropOverlay) cropOverlay.style.display = 'none';
+    }
+}
+
+// Crop overlay helpers
+function showCropRect(start, end) {
+    const overlay = $('#cropOverlay');
+    const rect = $('#cropRect');
+    if (!overlay || !rect) return;
+    
+    overlay.style.display = 'block';
+    rect.style.display = 'block';
+    updateCropRect(start, end);
+}
+
+function updateCropRect(start, end) {
+    const rect = $('#cropRect');
+    if (!rect) return;
+    
+    const canvasRect = editorState.canvas.getBoundingClientRect();
+    const containerRect = editorState.canvas.parentElement.getBoundingClientRect();
+    
+    const scaleX = canvasRect.width / editorState.canvas.width;
+    const scaleY = canvasRect.height / editorState.canvas.height;
+    
+    const x1 = Math.min(start.x, end.x) * scaleX;
+    const y1 = Math.min(start.y, end.y) * scaleY;
+    const x2 = Math.max(start.x, end.x) * scaleX;
+    const y2 = Math.max(start.y, end.y) * scaleY;
+    
+    rect.style.left = x1 + 'px';
+    rect.style.top = y1 + 'px';
+    rect.style.width = (x2 - x1) + 'px';
+    rect.style.height = (y2 - y1) + 'px';
+    rect.style.display = 'block';
+}
+
+function applyCrop() {
+    if (!editorState.cropStart || !editorState.cropEnd || !editorState.canvas) return;
+    
+    const x1 = Math.min(editorState.cropStart.x, editorState.cropEnd.x);
+    const y1 = Math.min(editorState.cropStart.y, editorState.cropEnd.y);
+    const x2 = Math.max(editorState.cropStart.x, editorState.cropEnd.x);
+    const y2 = Math.max(editorState.cropStart.y, editorState.cropEnd.y);
+    
+    const w = x2 - x1;
+    const h = y2 - y1;
+    
+    if (w < 10 || h < 10) {
+        showToast('Bereich zu klein', 'error');
+        return;
+    }
+    
+    // Extract cropped region
+    const imageData = editorState.ctx.getImageData(x1, y1, w, h);
+    
+    // Create new canvas with cropped size
+    const newCanvas = document.createElement('canvas');
+    newCanvas.width = w;
+    newCanvas.height = h;
+    const newCtx = newCanvas.getContext('2d');
+    newCtx.putImageData(imageData, 0, 0);
+    
+    // Replace main canvas
+    editorState.canvas.width = w;
+    editorState.canvas.height = h;
+    editorState.ctx.clearRect(0, 0, w, h);
+    editorState.ctx.drawImage(newCanvas, 0, 0);
+    
+    pushUndo();
+    
+    // Hide crop overlay
+    const cropOverlay = $('#cropOverlay');
+    if (cropOverlay) cropOverlay.style.display = 'none';
+    editorState.cropActive = false;
+    editorState.cropStart = null;
+    editorState.cropEnd = null;
+    
+    showToast('Bild zugeschnitten', 'success');
+}
+
+function saveEditor() {
+    if (!editorState.canvas || !editorState.fname) return;
+    
+    const dataUrl = editorState.canvas.toDataURL('image/jpeg', 0.95);
+    const cleanB64 = dataUrl.replace(/^data:image\/jpeg;base64,/, '');
+    
+    // Update state
+    state.images[editorState.fname] = cleanB64;
+    
+    // Update comparison view
+    comparePageMap = buildComparePageMap();
+    if (compareViewOpen) {
+        renderComparePage();
+    }
+    
+    // Update markdown preview
+    renderMarkdown(state.markdown);
+    
+    showToast('Bild gespeichert. Starte KI-Neu...', 'success');
+    
+    closeEditor(false);
+    
+    // Trigger re-description
+    reDescribeImage(editorState.fname);
+}
+
+function handleSwapFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const dataUrl = e.target.result;
+        const cleanB64 = dataUrl.replace(/^data:image\/[^;]+;base64,/, '');
+        
+        state.images[editorState.fname] = cleanB64;
+        
+        // Reload editor with new image
+        openEditor(editorState.fname);
+        
+        showToast('Bild ausgetauscht!', 'success');
+    };
+    reader.readAsDataURL(file);
+}
+
+// Editor Event Listeners
+on('#toolCrop', 'click', () => setEditorTool('crop'));
+on('#toolBrush', 'click', () => setEditorTool('brush'));
+on('#toolEyedropper', 'click', () => setEditorTool('eyedropper'));
+on('#toolUndo', 'click', undoEditor);
+on('#toolReset', 'click', () => {
+    if (editorState.originalB64) {
+        openEditor(editorState.fname);
+        showToast('Zurückgesetzt', 'info');
+    }
+});
+on('#toolCancel', 'click', () => closeEditor(true));
+on('#toolFinish', 'click', saveEditor);
+on('#toolSwap', 'click', () => $('#swapFileInput')?.click());
+on('#swapFileInput', 'change', (e) => {
+    if (e.target.files.length > 0) {
+        handleSwapFile(e.target.files[0]);
+        e.target.value = '';
+    }
+});
+on('#cropApply', 'click', applyCrop);
+on('#cropCancel', 'click', () => {
+    const cropOverlay = $('#cropOverlay');
+    if (cropOverlay) cropOverlay.style.display = 'none';
+    editorState.cropActive = false;
+    editorState.cropStart = null;
+    editorState.cropEnd = null;
+});
+on('#brushSize', 'input', (e) => {
+    const val = $('#brushSizeVal');
+    if (val) val.textContent = e.target.value;
+});
+
+// Keyboard: Escape to close, Ctrl+Z to undo
+document.addEventListener('keydown', (e) => {
+    if (!editorState.open) return;
+    if (e.key === 'Escape') {
+        closeEditor(true);
+    } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        undoEditor();
+    }
+});
+
 // ===== Comparison View Functions =====
 
 function buildComparePageMap() {
@@ -1796,26 +2226,21 @@ async function renderComparePage() {
     if (prevBtn) prevBtn.disabled = pageIndex <= 1;
     if (nextBtn) nextBtn.disabled = pageIndex >= total;
     
-    // Render original panel
+    // Render original panel - always render HD (ignore thumbnail cache)
     const originalPanel = $('#compareOriginal');
     if (originalPanel) {
-        let pdfBase64 = data.pdfPage;
-        
-        // If no preview cached, try on-demand rendering
-        if (!pdfBase64) {
-            originalPanel.innerHTML = `
-                <div class="compare-empty">
-                    <div style="width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 8px;"></div>
-                    Lade Seite ${compareCurrentPage}...
-                </div>
-            `;
-            pdfBase64 = await renderPdfPageOnDemand(Number(compareCurrentPage));
-        }
+        originalPanel.innerHTML = `
+            <div class="compare-empty">
+                <div style="width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 8px;"></div>
+                Lade Seite ${compareCurrentPage}...
+            </div>
+        `;
+        const pdfBase64 = await renderPdfPageOnDemand(Number(compareCurrentPage));
         
         if (pdfBase64) {
             originalPanel.innerHTML = `
                 <img src="${pdfBase64}" alt="Original Seite ${compareCurrentPage}" 
-                     style="max-width:100%;transform:scale(${compareZoom});transform-origin:top center;cursor:zoom-in;"
+                     style="width:auto;height:auto;max-width:none;display:block;margin:0 auto;cursor:zoom-in;"
                      onclick="openCompareZoom('${pdfBase64}', ${compareCurrentPage})">
             `;
         } else {
@@ -1843,11 +2268,13 @@ async function renderComparePage() {
                 const textareaId = `compare-desc-${compareCurrentPage}-${i}`;
                 // Ensure proper data URL format
                 const imgSrc = imgData.startsWith('data:') ? imgData : `data:image/jpeg;base64,${imgData}`;
+                const safeFname = fname.replace(/'/g, "\\'");
                 html += `
                     <div class="compare-image-card" data-fname="${fname}" data-imgidx="${i}">
                         <img src="${imgSrc}" alt="Erkanntes Bild ${i + 1}"
-                             style="max-width:100%;cursor:zoom-in;"
-                             onclick="openCompareZoom('${imgSrc}', ${compareCurrentPage})">
+                             style="max-width:100%;cursor:pointer;"
+                             onclick="openEditor('${safeFname}')"
+                             title="Klicken zum Bearbeiten">
                         <div class="compare-image-actions">
                             <textarea id="${textareaId}" class="compare-desc-textarea" 
                                 placeholder="Beschreibung eingeben..." rows="3">${escapeHtml(desc)}</textarea>

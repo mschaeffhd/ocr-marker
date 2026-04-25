@@ -415,17 +415,30 @@
                 <span class="editor-filename" id="editorFname"></span>
             </div>
             <div class="editor-tools">
-                <button class="tool-btn" id="toolCrop" title="Zuschneiden: Rahmen ziehen und anpassen">✂️ Zuschneiden</button>
-                <button class="tool-btn" id="toolEraser" title="Elemente entfernen (radieren)">🧹 Radierer</button>
-                <button class="tool-btn" id="toolSwap" title="Bild durch eigenes Bild ersetzen">🔄 Tauschen</button>
+                <button class="tool-btn" id="toolCrop" title="Zuschneiden">✂️ Zuschneiden</button>
+                <button class="tool-btn" id="toolBrush" title="Pinsel">🖌️ Pinsel</button>
+                <button class="tool-btn" id="toolEyedropper" title="Pipette">💧 Pipette</button>
+                <input type="color" id="brushColor" value="#ff0000" title="Farbe wählen">
+                <label class="editor-label">Größe:</label>
+                <input type="range" id="brushSize" min="1" max="50" value="10" title="Pinselgröße">
+                <span id="brushSizeVal">10</span>
+                <button class="tool-btn" id="toolUndo" title="Rückgängig">↩️ Undo</button>
+                <button class="tool-btn" id="toolSwap" title="Bild tauschen">🔄 Tauschen</button>
                 <input type="file" id="swapFileInput" accept="image/*" style="display:none;">
-                <button class="tool-btn tool-danger" id="toolReset" title="Änderungen verwerfen">↩️ Zurücksetzen</button>
-                <button class="tool-btn tool-primary" id="toolFinish" title="Bild akzeptieren und KI-Neubeschreibung">✅ Fertig & KI</button>
-                <button class="tool-btn tool-cancel" id="toolCancel" title="Editor schließen">✕</button>
+                <button class="tool-btn tool-danger" id="toolReset" title="Zurücksetzen">↩️ Reset</button>
+                <button class="tool-btn tool-primary" id="toolFinish" title="Speichern & KI-Neu">✅ Speichern & KI</button>
+                <button class="tool-btn tool-cancel" id="toolCancel" title="Schließen">✕</button>
             </div>
         </div>
-        <div class="editor-canvas-container">
+        <div class="editor-canvas-container" id="editorCanvasContainer">
             <canvas id="editorCanvas"></canvas>
+            <div id="cropOverlay" class="crop-overlay" style="display:none;">
+                <div class="crop-rect" id="cropRect"></div>
+                <div class="crop-buttons">
+                    <button id="cropApply">✓ Anwenden</button>
+                    <button id="cropCancel">✕ Abbrechen</button>
+                </div>
+            </div>
         </div>
     </div>
 

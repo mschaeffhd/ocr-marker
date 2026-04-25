@@ -1539,12 +1539,86 @@ body {
     overflow: auto;
     padding: 20px;
     background: #0f172a;
+    position: relative;
 }
 
 .editor-canvas-container canvas {
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     max-width: 100%;
     max-height: calc(100vh - 70px);
+    cursor: crosshair;
+}
+
+.editor-label {
+    color: #94a3b8;
+    font-size: 0.8rem;
+    margin-left: 4px;
+}
+
+#brushColor {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    padding: 0;
+}
+
+#brushSize {
+    width: 80px;
+    cursor: pointer;
+}
+
+#brushSizeVal {
+    color: #94a3b8;
+    font-size: 0.8rem;
+    min-width: 20px;
+}
+
+/* Crop Overlay */
+.crop-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.crop-rect {
+    position: absolute;
+    border: 2px dashed #4f46e5;
+    background: rgba(79, 70, 229, 0.1);
+    pointer-events: none;
+    display: none;
+}
+
+.crop-buttons {
+    position: absolute;
+    bottom: -40px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    pointer-events: auto;
+}
+
+.crop-buttons button {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: none;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+#cropApply {
+    background: #10b981;
+    color: white;
+}
+
+#cropCancel {
+    background: #ef4444;
+    color: white;
 }
 
 /* ===== PDF Preview ===== */
@@ -1694,7 +1768,8 @@ body {
 .compare-panel {
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: auto;
+    max-height: 80vh;
 }
 
 .compare-panel-original {
