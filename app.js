@@ -364,7 +364,12 @@ async function describeImages() {
 
 // Step 4: Update Markdown with captions
 function updateMarkdownWithCaptions() {
-    let lines = state.markdown.split('\n');
+    // 1. Zuerst alle existierenden Beschreibungsblöcke entfernen (verhindert Duplikate)
+    let md = state.markdown;
+    md = md.replace(/\n?<!-- DESC-START -->\n[\s\S]*?\n<!-- DESC-END -->\n?/g, '\n');
+    md = md.replace(/\n{3,}/g, '\n\n');
+    
+    let lines = md.split('\n');
     const newLines = [];
     
     for (let i = 0; i < lines.length; i++) {
@@ -387,9 +392,11 @@ function updateMarkdownWithCaptions() {
                     state.captions = state.captions || {};
                     state.captions[fname] = desc;
                     
-                    // Append caption as text under the image
+                    // Append caption as text under the image with invisible markers for export filtering
                     newLines.push('');
+                    newLines.push('<!-- DESC-START -->');
                     newLines.push(desc + '.');
+                    newLines.push('<!-- DESC-END -->');
                 }
             }
         }
@@ -1423,6 +1430,14 @@ async function exportToDocx() {
         // Apply MBZ cleaning filters
         md = getCleanedMarkdown(md);
         
+        // Wenn "Bildbeschreibungen nur als Alt-Text speichern" aktiv: Beschreibungsblöcke aus Markdown entfernen
+        const altOnly = $('#docx-alt-only')?.checked || false;
+        if (altOnly) {
+            md = md.replace(/<!-- DESC-START -->[\s\S]*?<!-- DESC-END -->/g, '');
+            // Überflüssige Leerzeilen bereinigen
+            md = md.replace(/\n{3,}/g, '\n\n');
+        }
+        
         // 2. Markdown zu HTML
         marked.setOptions({
             breaks: true,
@@ -1437,6 +1452,9 @@ async function exportToDocx() {
             lineSpacing: $('#docxLineSpacing')?.value || '1'
         };
         
+        // Prüfe ob nur Beschreibungen ohne Bilder in Word gespeichert werden sollen
+        const descOnly = $('#docx-desc-only')?.checked !== false;
+        
         // Bilder einbetten (Bilder sind in state.images as base64)
         for (const [fname, b64] of Object.entries(state.images)) {
             // Wir suchen im HTML nach Tags, die diesen Filename im src haben
@@ -1445,8 +1463,35 @@ async function exportToDocx() {
             htmlContent = htmlContent.replace(imgRegex, (match) => {
                 // Beschreibung finden falls vorhanden
                 const desc = state.descriptions[fname] || '';
-                let newTag = match.replace(/src=["'][^"']*["']/, `src="data:image/jpeg;base64,${b64}"`);
                 
+                // Wenn "Bildbeschreibungen ohne Bilder" aktiv: Bild komplett entfernen
+                if (descOnly) {
+                    return '';
+                }
+                
+                // Standard: Bild als Base64 einbetten, mit bereinigtem Alt-Text
+                let cleanDesc = desc
+                    .replace(/\(\(Bild\)\)/g, '')
+                    .replace(/\(\(\/Bild\)\)/g, '')
+                    .replace(/<<Bild>>/g, '')
+                    .replace(/<<\/Bild>>/g, '')
+                    .replace(/<Bild>/g, '')
+                    .replace(/<\/Bild>/g, '')
+                    .replace(/<br\s*\/?>/gi, '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+
+                let altAttr = '';
+                if (cleanDesc) {
+                    const escapedDesc = cleanDesc
+                        .replace(/"/g, '&quot;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;');
+                    altAttr = ` alt="${escapedDesc}"`;
+                }
+
+                let newTag = `<img src="data:image/jpeg;base64,${b64}"${altAttr}>`;
+
                 if (settings.includeCaptions && desc) {
                     return `<div style="text-align: center; margin-bottom: 20px;">${newTag}<p style="font-size: 10pt; color: #666; margin-top: 5px;">${desc}</p></div>`;
                 }
@@ -1562,6 +1607,8 @@ function saveConfig() {
         'docx-opt-images': $('#docx-opt-images')?.checked || false,
         'docx-opt-dashes': $('#docx-opt-dashes')?.checked || false,
         'docx-opt-pagebreak': $('#docx-opt-pagebreak')?.checked || false,
+        'docx-desc-only': $('#docx-desc-only')?.checked !== false,
+        'docx-alt-only': $('#docx-alt-only')?.checked || false,
     };
     
     localStorage.setItem('pipeline_config_v2', encrypt(JSON.stringify(configData)));
@@ -1618,6 +1665,15 @@ function loadConfig() {
             if ($('#stripExistingOcr')) $('#stripExistingOcr').checked = config.stripExistingOcr || false;
             if ($('#redoInlineMath')) $('#redoInlineMath').checked = config.redoInlineMath || false;
             if ($('#disableImageExtraction')) $('#disableImageExtraction').checked = config.disableImageExtraction || false;
+            
+            // Bildbeschreibungen ohne Bilder in Word (standardmäßig aktiv)
+            if ($('#docx-desc-only')) $('#docx-desc-only').checked = config['docx-desc-only'] !== false;
+            
+            // Bildbeschreibungen nur als Alt-Text (standardmäßig inaktiv)
+            if ($('#docx-alt-only')) $('#docx-alt-only').checked = config['docx-alt-only'] || false;
+            
+            // Visibility der Alt-Text-Option aktualisieren
+            updateAltOnlyVisibility();
             
             // Word Export Optionen
             if ($('#docxFontSize')) $('#docxFontSize').value = config.docxFontSize || '12';
@@ -2340,6 +2396,21 @@ function updatePageNumberUI() {
     // Show/hide the number input fields
     if (inputsContainer) inputsContainer.style.display = (paginate && showNums) ? 'block' : 'none';
 }
+
+// Visibility der Alt-Text-Option steuern
+function updateAltOnlyVisibility() {
+    const descOnly = $('#docx-desc-only')?.checked !== false;
+    const altOnlyGroup = $('#docx-alt-only-group');
+    if (altOnlyGroup) {
+        altOnlyGroup.style.display = descOnly ? 'none' : '';
+    }
+}
+
+// Bildbeschreibungen-ohne-Bilder toggle
+on('#docx-desc-only', 'change', () => {
+    if (typeof saveConfig === 'function') saveConfig();
+    updateAltOnlyVisibility();
+});
 
 // Paginate Output toggle
 on('#paginateOutput', 'change', () => {

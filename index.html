@@ -48,7 +48,7 @@
                 </div>
                 <div class="header-title">
                     <p class="subtitle">PDF zu E-Buch</p>
-                    <span class="version-badge" id="versionBadge">v2.32</span>
+                    <span class="version-badge" id="versionBadge">v2.33</span>
                 </div>
             </div>
         </header>
@@ -67,22 +67,13 @@
                         </div>
                     </div>
                     <div class="panel-body">
-                        <div class="form-group">
-                            <label for="imagePrompt">Bilderkennungs-Prompt</label>
-                            <textarea id="imagePrompt" rows="10" placeholder="Prompt für die KI-Bildbeschreibung...">Describe illustrations comprehensively in German. Use the following internal structure:
-
-((Bild))
-Art der Abbildung (z. B. Foto, Zeichnung, Diagramm):
-Beschreibung: …  / Bildtext: …
-((/Bild))
-
-* Place captions and titles above the ((Bild))((/Bild)) tag if they exist in the source.
-* Use LaTeX for ALL mathematical expressions.
-* If there is text in the image stick with the language it is written in and don't translate it.</textarea>
-                        </div>
                         <div class="checkbox-group">
                             <label for="forceOcr">Erzwinge OCR</label>
                             <input type="checkbox" id="forceOcr">
+                        </div>
+                        <div class="form-group">
+                            <label for="pageRange">zu erkennende Seiten</label>
+                            <input type="text" id="pageRange" placeholder="z.B. 1-10,15">
                         </div>
                         <div class="checkbox-group">
                             <label for="paginateOutput">Ausgabe mit Seitenzahlen</label>
@@ -105,16 +96,33 @@ Beschreibung: …  / Bildtext: …
                                 </div>
                             </div>
                         </div>
+                        <div class="checkbox-group">
+                            <label for="docx-desc-only">Bildbeschreibungen ohne Bilder in Word speichern</label>
+                            <input type="checkbox" id="docx-desc-only" checked>
+                        </div>
+                        <div class="checkbox-group" id="docx-alt-only-group" style="padding-left: 16px; border-left: 2px solid var(--border); margin-left: 4px;">
+                            <label for="docx-alt-only">Bildbeschreibungen nur als Alt-Text speichern</label>
+                            <input type="checkbox" id="docx-alt-only">
+                        </div>
+                        <div class="form-group">
+                            <label for="imagePrompt">Bilderkennungs-Prompt</label>
+                            <textarea id="imagePrompt" rows="10" placeholder="Prompt für die KI-Bildbeschreibung...">Describe illustrations comprehensively in German. Use the following internal structure:
+
+((Bild))
+Art der Abbildung (z. B. Foto, Zeichnung, Diagramm):
+Beschreibung: …  / Bildtext: …
+((/Bild))
+
+* Place captions and titles above the ((Bild))((/Bild)) tag if they exist in the source.
+* Use LaTeX for ALL mathematical expressions.
+* If there is text in the image stick with the language it is written in and don't translate it.</textarea>
+                        </div>
                         <div class="form-group">
                             <label for="outputFormat">Ausgabeformat</label>
                             <select id="outputFormat">
                                 <option value="markdown">Markdown</option>
                                 <option value="json">JSON</option>
                             </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="pageRange">zu erkennende Seiten</label>
-                            <input type="text" id="pageRange" placeholder="z.B. 1-10,15">
                         </div>
                     </div>
                 </section>
@@ -230,10 +238,6 @@ Beschreibung: …  / Bildtext: …
                     </div>
                     <div class="panel-body">
                         <div class="form-group">
-                            <label for="apiToken">API Token</label>
-                            <input type="password" id="apiToken" value="" placeholder="sk-...">
-                        </div>
-                        <div class="form-group">
                             <label for="modelSelect">KI-Modell</label>
                             <select id="modelSelect">
                                 <option value="">Lade Modelle...</option>
@@ -242,6 +246,10 @@ Beschreibung: …  / Bildtext: …
                         <div style="text-align: right; margin-top: -8px;">
                             <button class="btn btn-text" id="btnReloadModels" title="Modelle neu laden">🔄 Modelle neu
                                 laden</button>
+                        </div>
+                        <div class="form-group">
+                            <label for="apiToken">API-Key LLM</label>
+                            <input type="password" id="apiToken" value="" placeholder="sk-...">
                         </div>
                         <div class="form-group">
                             <label for="markerServerUrl">Marker Server URL</label>
@@ -550,7 +558,7 @@ Beschreibung: …  / Bildtext: …
         </div>
     </div>
 
-    <script src="app.js?v=20260425"></script>
+    <script src="app.js?v=20260426"></script>
 </body>
 
 </html>
