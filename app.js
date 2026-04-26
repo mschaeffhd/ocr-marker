@@ -628,6 +628,7 @@ function renderMarkdown(md) {
         .replace(/\n/g, '<br>');
     
     safeHTML('#mdRendered', finalHtml);
+    if (window.MathJax) MathJax.typesetPromise(['#mdRendered']);
 }
 
 // Step 5: Create ZIP
