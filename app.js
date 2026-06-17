@@ -309,14 +309,24 @@ function chandraHtmlToMarkdown(html) {
     const parser = new DOMParser();
     const doc = parser.parseFromString('<body>' + html + '</body>', 'text/html');
 
+    // Convert element content to text, wrapping <math> in $...$ and preserving <b>/<i>
     function innerText(el) {
         let text = '';
         for (const node of el.childNodes) {
             if (node.nodeType === Node.TEXT_NODE) {
                 text += node.textContent;
             } else if (node.nodeType === Node.ELEMENT_NODE) {
-                if (node.dataset && node.dataset.label === 'InlineEquation') {
+                const tag = node.tagName.toLowerCase();
+                const lbl = node.dataset && node.dataset.label;
+                if (tag === 'math') {
+                    const latex = node.textContent.trim();
+                    text += latex ? ' $' + latex + '$ ' : '';
+                } else if (lbl === 'InlineEquation' || lbl === 'Inline-Equation') {
                     text += ' $' + node.textContent.trim() + '$ ';
+                } else if (tag === 'b' || tag === 'strong') {
+                    text += '**' + innerText(node) + '**';
+                } else if (tag === 'i' || tag === 'em') {
+                    text += '*' + innerText(node) + '*';
                 } else {
                     text += innerText(node);
                 }
@@ -325,26 +335,42 @@ function chandraHtmlToMarkdown(html) {
         return text;
     }
 
+    // Determine heading level from child h1-h6 tag, default ##
+    function headingPrefix(block) {
+        const h = block.querySelector('h1,h2,h3,h4,h5,h6');
+        if (!h) return '## ';
+        const level = parseInt(h.tagName[1]);
+        return '#'.repeat(Math.min(level, 4)) + ' ';
+    }
+
     const blocks = doc.body.querySelectorAll('div[data-label]');
     if (blocks.length === 0) return doc.body.textContent.trim();
 
     const parts = [];
     for (const block of blocks) {
-        const label = block.dataset.label;
+        const label = block.dataset.label || '';
         switch (label) {
-            case 'SectionHeader':
-                parts.push('\n## ' + innerText(block).trim() + '\n');
+            case 'Section-Header':
+            case 'SectionHeader': {
+                const prefix = headingPrefix(block);
+                const heading = block.querySelector('h1,h2,h3,h4,h5,h6');
+                const text = heading ? innerText(heading).trim() : innerText(block).trim();
+                parts.push('\n' + prefix + text + '\n');
                 break;
+            }
             case 'Text': {
                 const t = innerText(block).trim();
                 if (t) parts.push(t + '\n');
                 break;
             }
+            case 'List-Item':
             case 'ListItem':
                 parts.push('- ' + innerText(block).trim());
                 break;
-            case 'Equation': {
-                const eq = block.textContent.trim();
+            case 'Equation':
+            case 'Display-Equation': {
+                const mathEl = block.querySelector('math');
+                const eq = mathEl ? mathEl.textContent.trim() : block.textContent.trim();
                 if (eq) parts.push('\n$$\n' + eq + '\n$$\n');
                 break;
             }
@@ -366,10 +392,13 @@ function chandraHtmlToMarkdown(html) {
             case 'Caption':
                 parts.push('*' + innerText(block).trim() + '*\n');
                 break;
+            case 'Footnote':
             case 'FootNote':
                 parts.push('> ' + innerText(block).trim() + '\n');
                 break;
+            case 'Page-Header':
             case 'PageHeader':
+            case 'Page-Footer':
             case 'PageFooter':
                 break;
             default: {
