@@ -4,6 +4,9 @@ const CONFIG = {
     apiToken: '',
     markerApiToken: '',
     model: 'alleskoenner-schnell-qwen36-35b-a3b',
+    ocrBackend: 'marker',
+    chandraUrl: 'http://127.0.0.1:1234',
+    chandraModel: 'chandra-ocr-2-nvfp4-mlx',
 };
 
 // Default prompt for image recognition
@@ -284,6 +287,160 @@ async function convertWithMarker() {
         }
         throw err;
     }
+}
+
+// ── Chandra OCR (via LM Studio) ──────────────────────────────────────────────
+
+function parsePageRange(rangeStr, totalPages) {
+    if (!rangeStr) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const pages = new Set();
+    for (const part of rangeStr.split(',')) {
+        const m = part.trim().match(/^(\d+)(?:-(\d+))?$/);
+        if (!m) continue;
+        const start = parseInt(m[1]);
+        const end = m[2] ? parseInt(m[2]) : start;
+        for (let p = start; p <= Math.min(end, totalPages); p++) pages.add(p);
+    }
+    return [...pages].sort((a, b) => a - b);
+}
+
+function chandraHtmlToMarkdown(html) {
+    if (!html || !html.trim()) return '';
+    const parser = new DOMParser();
+    const doc = parser.parseFromString('<body>' + html + '</body>', 'text/html');
+
+    function innerText(el) {
+        let text = '';
+        for (const node of el.childNodes) {
+            if (node.nodeType === Node.TEXT_NODE) {
+                text += node.textContent;
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                if (node.dataset && node.dataset.label === 'InlineEquation') {
+                    text += ' $' + node.textContent.trim() + '$ ';
+                } else {
+                    text += innerText(node);
+                }
+            }
+        }
+        return text;
+    }
+
+    const blocks = doc.body.querySelectorAll('div[data-label]');
+    if (blocks.length === 0) return doc.body.textContent.trim();
+
+    const parts = [];
+    for (const block of blocks) {
+        const label = block.dataset.label;
+        switch (label) {
+            case 'SectionHeader':
+                parts.push('\n## ' + innerText(block).trim() + '\n');
+                break;
+            case 'Text': {
+                const t = innerText(block).trim();
+                if (t) parts.push(t + '\n');
+                break;
+            }
+            case 'ListItem':
+                parts.push('- ' + innerText(block).trim());
+                break;
+            case 'Equation': {
+                const eq = block.textContent.trim();
+                if (eq) parts.push('\n$$\n' + eq + '\n$$\n');
+                break;
+            }
+            case 'Table': {
+                const tbl = block.querySelector('table');
+                if (tbl) parts.push('\n' + tbl.outerHTML + '\n');
+                else { const tb = innerText(block).trim(); if (tb) parts.push(tb); }
+                break;
+            }
+            case 'Figure':
+            case 'Image': {
+                const img = block.querySelector('img');
+                const alt = img ? (img.getAttribute('alt') || '').trim() : '';
+                const desc = innerText(block).replace(alt, '').trim();
+                const caption = desc || alt;
+                if (caption) parts.push('\n*[Abbildung: ' + caption + ']*\n');
+                break;
+            }
+            case 'Caption':
+                parts.push('*' + innerText(block).trim() + '*\n');
+                break;
+            case 'FootNote':
+                parts.push('> ' + innerText(block).trim() + '\n');
+                break;
+            case 'PageHeader':
+            case 'PageFooter':
+                break;
+            default: {
+                const def = innerText(block).trim();
+                if (def) parts.push(def + '\n');
+            }
+        }
+    }
+    return parts.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+async function convertWithChandra() {
+    if (!pdfDocument) throw new Error('Kein PDF geladen');
+
+    const chandraUrl = ($('#chandraUrl')?.value || CONFIG.chandraUrl || 'http://127.0.0.1:1234').replace(/\/$/, '');
+    const chandraModel = $('#chandraModel')?.value || CONFIG.chandraModel || 'chandra-ocr-2-nvfp4-mlx';
+    const pageRange = $('#pageRange')?.value?.trim() || '';
+    const pages = parsePageRange(pageRange, pdfTotalPages);
+
+    addLog('conversionLog', `Chandra: ${pages.length} Seite(n) · Modell: ${chandraModel}`, 'info');
+
+    const markdownParts = [];
+    for (let idx = 0; idx < pages.length; idx++) {
+        const pageNum = pages[idx];
+        addLog('conversionLog', `Seite ${pageNum} von ${pdfTotalPages} …`, 'info');
+
+        const page = await pdfDocument.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 2.0 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        const imageBase64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+
+        const response = await fetch(chandraUrl + '/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: chandraModel,
+                messages: [{ role: 'user', content: [
+                    { type: 'text', text: '<image>\nReturn the markdown.' },
+                    { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + imageBase64 } }
+                ]}],
+                max_tokens: 4096,
+                temperature: 0
+            })
+        });
+
+        if (!response.ok) throw new Error(`Chandra API Fehler (Seite ${pageNum}): ${await response.text()}`);
+
+        const result = await response.json();
+        const md = chandraHtmlToMarkdown(result.choices[0].message.content);
+        markdownParts.push(md);
+    }
+
+    state.markdown = markdownParts.join('\n\n---\n\n');
+    state.images = {};
+
+    safeText('#statChars', state.markdown.length.toLocaleString());
+    safeText('#statImages', '0');
+    safeStyle('#conversionStats', 'display', 'flex');
+    addLog('conversionLog', `✓ ${pages.length} Seite(n) mit Chandra verarbeitet`, 'success');
+    updateMarkdownWithCaptions();
+}
+
+function updateBackendUI() {
+    const backend = $('#ocrBackend')?.value || 'marker';
+    const markerDiv = $('#markerSettings');
+    const chandraDiv = $('#chandraSettings');
+    if (markerDiv) markerDiv.style.display = backend === 'marker' ? '' : 'none';
+    if (chandraDiv) chandraDiv.style.display = backend === 'chandra' ? '' : 'none';
 }
 
 // Step 3: Describe images with OpenWebUI
@@ -726,10 +883,18 @@ async function runPipeline() {
             setStepStatus(2, 'completed', 'Bild direkt geladen ✓ (keine Konvertierung nötig)');
             addLog('conversionLog', 'Bild direkt geladen – keine Marker-Konvertierung nötig.', 'info');
         } else {
-            setStepStatus(2, 'active', 'Konvertiere mit Marker...');
-            addLog('conversionLog', 'Starte Konvertierung...', 'info');
-            await convertWithMarker();
-            setStepStatus(2, 'completed', 'Konvertiert ✓');
+            const backend = $('#ocrBackend')?.value || 'marker';
+            if (backend === 'chandra') {
+                setStepStatus(2, 'active', 'Konvertiere mit Chandra (LM Studio)...');
+                addLog('conversionLog', 'Starte Chandra-Konvertierung...', 'info');
+                await convertWithChandra();
+                setStepStatus(2, 'completed', 'Konvertiert mit Chandra ✓');
+            } else {
+                setStepStatus(2, 'active', 'Konvertiere mit Marker...');
+                addLog('conversionLog', 'Starte Konvertierung...', 'info');
+                await convertWithMarker();
+                setStepStatus(2, 'completed', 'Konvertiert ✓');
+            }
         }
         
         // Step 3: Describe
@@ -1576,6 +1741,9 @@ $$('.toolbar-btn').forEach(btn => {
 // Auto-save config to localStorage (encrypted)
 function saveConfig() {
     const configData = {
+        ocrBackend: $('#ocrBackend')?.value || 'marker',
+        chandraUrl: $('#chandraUrl')?.value || 'http://127.0.0.1:1234',
+        chandraModel: $('#chandraModel')?.value || 'chandra-ocr-2-nvfp4-mlx',
         markerServerUrl: $('#markerServerUrl')?.value || '',
         markerApiToken: $('#markerApiToken')?.value || '',
         openwebuiUrl: $('#openwebuiUrl')?.value || '',
@@ -1652,6 +1820,10 @@ function loadConfig() {
                 console.log('DNS Migration: Fixed hyphenated markerServerUrl to dot version.');
             }
 
+            if ($('#ocrBackend')) $('#ocrBackend').value = config.ocrBackend || 'marker';
+            if ($('#chandraUrl')) $('#chandraUrl').value = config.chandraUrl || 'http://127.0.0.1:1234';
+            if ($('#chandraModel')) $('#chandraModel').value = config.chandraModel || 'chandra-ocr-2-nvfp4-mlx';
+            updateBackendUI();
             if ($('#markerServerUrl')) $('#markerServerUrl').value = config.markerServerUrl || CONFIG.markerServerUrl;
             if ($('#markerApiToken')) $('#markerApiToken').value = config.markerApiToken || '';
             if ($('#openwebuiUrl')) $('#openwebuiUrl').value = config.openwebuiUrl || CONFIG.openwebuiUrl;
@@ -1742,6 +1914,8 @@ $$('input, select, textarea').forEach(el => {
 });
 
 // Load models when OpenWebUI URL changes
+on('#ocrBackend', 'change', updateBackendUI);
+
 on('#openwebuiUrl', 'input', debounce(async function() {
     const url = this.value.trim();
     if (!url) {

@@ -270,13 +270,36 @@ Beschreibung: …  / Bildtext: …
                             <input type="password" id="apiToken" value="" placeholder="sk-...">
                         </div>
                         <div class="form-group">
-                            <label for="markerServerUrl">Base URL Marker</label>
-                            <input type="text" id="markerServerUrl" value="./api/marker/upload"
-                                placeholder="./api/marker/upload">
+                            <label for="ocrBackend">OCR-Backend</label>
+                            <select id="ocrBackend">
+                                <option value="marker">Marker (Server)</option>
+                                <option value="chandra">Chandra (Lokal · LM Studio)</option>
+                            </select>
                         </div>
-                        <div class="form-group">
-                            <label for="markerApiToken">API-Key Marker</label>
-                            <input type="password" id="markerApiToken" value="" placeholder="sk-...">
+
+                        <div id="markerSettings">
+                            <div class="form-group">
+                                <label for="markerServerUrl">Base URL Marker</label>
+                                <input type="text" id="markerServerUrl" value="./api/marker/upload"
+                                    placeholder="./api/marker/upload">
+                            </div>
+                            <div class="form-group">
+                                <label for="markerApiToken">API-Key Marker</label>
+                                <input type="password" id="markerApiToken" value="" placeholder="sk-...">
+                            </div>
+                        </div>
+
+                        <div id="chandraSettings" style="display:none">
+                            <div class="form-group">
+                                <label for="chandraUrl">LM Studio URL</label>
+                                <input type="text" id="chandraUrl" value="http://127.0.0.1:1234"
+                                    placeholder="http://127.0.0.1:1234">
+                            </div>
+                            <div class="form-group">
+                                <label for="chandraModel">Chandra-Modell</label>
+                                <input type="text" id="chandraModel" value="chandra-ocr-2-nvfp4-mlx"
+                                    placeholder="chandra-ocr-2-nvfp4-mlx">
+                            </div>
                         </div>
                     </div>
                 </section>
