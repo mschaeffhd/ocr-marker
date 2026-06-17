@@ -343,8 +343,34 @@ function chandraHtmlToMarkdown(html) {
         return '#'.repeat(Math.min(level, 4)) + ' ';
     }
 
+    function nodeToMd(node) {
+        if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+        if (node.nodeType !== Node.ELEMENT_NODE) return '';
+        const tag = node.tagName.toLowerCase();
+        if (tag === 'math') return ' $' + node.textContent.trim() + '$ ';
+        if (tag === 'b' || tag === 'strong') return '**' + Array.from(node.childNodes).map(nodeToMd).join('') + '**';
+        if (tag === 'i' || tag === 'em') return '*' + Array.from(node.childNodes).map(nodeToMd).join('') + '*';
+        if (tag === 'ol') {
+            let i = 1;
+            return Array.from(node.children)
+                .filter(n => n.tagName.toLowerCase() === 'li')
+                .map(li => `${i++}. ${Array.from(li.childNodes).map(nodeToMd).join('').trim()}`)
+                .join('\n') + '\n';
+        }
+        if (tag === 'ul') {
+            return Array.from(node.children)
+                .filter(n => n.tagName.toLowerCase() === 'li')
+                .map(li => `- ${Array.from(li.childNodes).map(nodeToMd).join('').trim()}`)
+                .join('\n') + '\n';
+        }
+        if (tag === 'table') {
+            return '\n' + node.outerHTML.replace(/<math>([\s\S]*?)<\/math>/g, (_, c) => '$' + c.trim() + '$') + '\n';
+        }
+        return Array.from(node.childNodes).map(nodeToMd).join('');
+    }
+
     const blocks = doc.body.querySelectorAll('div[data-label]');
-    if (blocks.length === 0) return doc.body.textContent.trim();
+    if (blocks.length === 0) return nodeToMd(doc.body).trim();
 
     const parts = [];
     for (const block of blocks) {
@@ -363,6 +389,10 @@ function chandraHtmlToMarkdown(html) {
                 if (t) parts.push(t + '\n');
                 break;
             }
+            case 'List-Group':
+            case 'ListGroup':
+                parts.push(nodeToMd(block).trim() + '\n');
+                break;
             case 'List-Item':
             case 'ListItem':
                 parts.push('- ' + innerText(block).trim());
@@ -376,17 +406,26 @@ function chandraHtmlToMarkdown(html) {
             }
             case 'Table': {
                 const tbl = block.querySelector('table');
-                if (tbl) parts.push('\n' + tbl.outerHTML + '\n');
-                else { const tb = innerText(block).trim(); if (tb) parts.push(tb); }
+                if (tbl) {
+                    const rows = Array.from(tbl.querySelectorAll('tr'));
+                    if (rows.length) {
+                        const mdRows = rows.map(row =>
+                            '| ' + Array.from(row.querySelectorAll('th,td')).map(c => innerText(c).trim()).join(' | ') + ' |'
+                        );
+                        const colCount = tbl.querySelector('tr')?.querySelectorAll('th,td').length || 1;
+                        mdRows.splice(1, 0, '| ' + Array(colCount).fill('---').join(' | ') + ' |');
+                        parts.push('\n' + mdRows.join('\n') + '\n');
+                    }
+                } else { const tb = innerText(block).trim(); if (tb) parts.push(tb); }
                 break;
             }
             case 'Figure':
             case 'Image': {
                 const img = block.querySelector('img');
                 const alt = img ? (img.getAttribute('alt') || '').trim() : '';
-                const desc = innerText(block).replace(alt, '').trim();
-                const caption = desc || alt;
-                if (caption) parts.push('\n*[Abbildung: ' + caption + ']*\n');
+                const captionText = innerText(block).trim();
+                const description = [captionText, alt].filter(Boolean).join(' ');
+                if (description) parts.push('\n*[Abbildung: ' + description + ']*\n');
                 break;
             }
             case 'Caption':
@@ -426,12 +465,21 @@ async function convertWithChandra() {
         addLog('conversionLog', `Seite ${pageNum} von ${pdfTotalPages} …`, 'info');
 
         const page = await pdfDocument.getPage(pageNum);
+
+        const textContent = await page.getTextContent();
+        const rawText = textContent.items.map(i => i.str + (i.hasEOL ? '\n' : ' ')).join('');
+
+        const firstItem = textContent.items[0]?.str?.trim() || '';
+        const pdfPageLabel = /^\d{1,4}$/.test(firstItem) ? firstItem : null;
+
         const viewport = page.getViewport({ scale: 2.0 });
         const canvas = document.createElement('canvas');
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-        const imageBase64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+        const imageBase64 = canvas.toDataURL('image/png').split(',')[1];
+
+        const prompt = `The following raw text was extracted directly from this PDF page and is the authoritative source for all symbols, variables, and content:\n\n<raw_text>\n${rawText}\n</raw_text>\n\nConvert this page to well-formatted markdown with LaTeX for all mathematical expressions. Rules:\n- Trust the raw text above for every character and symbol — do NOT substitute, interpret, or correct anything, especially mathematical variables like n, k, ∞.\n- Use the image for layout, structure, and numbered/bulleted list detection.\n- Preserve numbered lists (1. 2. 3.) exactly — never merge list items into prose.\n- For every figure, chart, diagram, or illustration visible in the image: always provide a detailed description IN GERMAN of what is visually shown. A caption label like "Histogramm:" is NOT a description — look at the image and describe the actual visual content. Write the img alt attribute in German.`;
 
         const response = await fetch(chandraUrl + '/v1/chat/completions', {
             method: 'POST',
@@ -439,8 +487,8 @@ async function convertWithChandra() {
             body: JSON.stringify({
                 model: chandraModel,
                 messages: [{ role: 'user', content: [
-                    { type: 'text', text: '<image>\nReturn the markdown.' },
-                    { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + imageBase64 } }
+                    { type: 'text', text: prompt },
+                    { type: 'image_url', image_url: { url: 'data:image/png;base64,' + imageBase64 } }
                 ]}],
                 max_tokens: 4096,
                 temperature: 0
@@ -451,7 +499,8 @@ async function convertWithChandra() {
 
         const result = await response.json();
         const md = chandraHtmlToMarkdown(result.choices[0].message.content);
-        markdownParts.push(md);
+        const mdWithPageNum = pdfPageLabel ? `((${pdfPageLabel}))\n\n${md}` : md;
+        markdownParts.push(mdWithPageNum);
     }
 
     state.markdown = markdownParts.join('\n\n---\n\n');

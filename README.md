@@ -9,7 +9,8 @@
 
 ## 🚀 Features
 
-- **📄 PDF zu Markdown**: Konvertierung mit dem Marker-OCR-Backend
+- **📄 PDF zu Markdown**: Konvertierung wahlweise mit Marker-OCR oder Chandra (lokal, via LM Studio)
+- **🔬 Chandra-Backend**: Lokales Vision-Modell mit Rohtext-Anker für präzise Mathematik-Erkennung
 - **🤖 KI-Bildanalyse**: Automatische Bildbeschreibung via OpenWebUI (LLaVA, GPT-4V etc.)
 - **📊 Seitenvergleich**: Side-by-Side-Ansicht von Original-PDF und erkannten Bildern
 - **🖼️ Bild-Editor**: Integrierter Editor zum Zuschneiden, Übermalen und Austauschen von Bildern
@@ -26,7 +27,11 @@
 │   Benutzer      │────▶│   Frontend      │────▶│   Marker API    │
 │   (Browser)     │◄────│   (HTML/JS)     │◄────│   (OCR/Parser)  │
 └─────────────────┘     └────────┬────────┘     └─────────────────┘
-                                 │
+                                 │              ┌─────────────────┐
+                                 │─────────────▶│   Chandra       │
+                                 │              │   (LM Studio,   │
+                                 │              │    lokal)       │
+                                 │              └─────────────────┘
                                  ▼
                         ┌─────────────────┐
                         │   OpenWebUI     │
