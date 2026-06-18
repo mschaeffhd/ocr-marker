@@ -487,12 +487,12 @@ async function convertWithChandra() {
             .map(i => i.str.trim())
             .find(s => /^\d{1,4}$/.test(s)) || null;
 
-        const viewport = page.getViewport({ scale: 2.0 });
+        const viewport = page.getViewport({ scale: 1.5 });
         const canvas = document.createElement('canvas');
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-        const imageBase64 = canvas.toDataURL('image/jpeg', 0.92).split(',')[1];
+        const imageBase64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
 
         const prompt = `The following raw text was extracted directly from this PDF page and is the authoritative source for all symbols, variables, and content:\n\n<raw_text>\n${rawText}\n</raw_text>\n\nConvert this page to well-formatted markdown with LaTeX for all mathematical expressions. Rules:\n- Trust the raw text above for every character and symbol — do NOT substitute, interpret, or correct anything, especially mathematical variables like n, k, ∞.\n- Use the image for layout, structure, and numbered/bulleted list detection.\n- Preserve numbered lists (1. 2. 3.) exactly — never merge list items into prose.\n- For every figure, chart, diagram, or illustration visible in the image: always provide a detailed description of what is visually shown. A caption label like "Histogramm:" is NOT a description — look at the image and describe the actual visual content.\n- CRITICAL: Write ALL image descriptions and img alt attributes in GERMAN (Deutsch). Never use English for any description. Example: not "Graph showing..." but "Koordinatensystem mit..."`;
 
@@ -504,7 +504,7 @@ async function convertWithChandra() {
             headers: fetchHeaders,
             body: JSON.stringify({
                 model: chandraModel,
-                stream: false,
+                stream: true,
                 messages: [{ role: 'user', content: [
                     { type: 'text', text: prompt },
                     { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + imageBase64 } }
@@ -515,10 +515,31 @@ async function convertWithChandra() {
 
         if (!response.ok) throw new Error(`Chandra API Fehler (Seite ${pageNum}): ${await response.text()}`);
 
-        const responseText = await response.text();
-        const result = JSON.parse(responseText);
-        const msg = result.choices[0].message;
-        const md = chandraHtmlToMarkdown(msg.content || msg.reasoning_content || '');
+        // SSE-Stream lesen und Content-Tokens akkumulieren
+        let fullContent = '';
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const data = line.slice(6).trim();
+                if (data === '[DONE]') break;
+                try {
+                    const chunk = JSON.parse(data);
+                    const delta = chunk.choices?.[0]?.delta;
+                    if (delta?.content) fullContent += delta.content;
+                    else if (delta?.reasoning_content) fullContent += delta.reasoning_content;
+                } catch { /* unvollständiges JSON überspringen */ }
+            }
+        }
+
+        const md = chandraHtmlToMarkdown(fullContent);
         const mdWithPageNum = pdfPageLabel ? `((${pdfPageLabel}))\n\n${md}` : md;
         markdownParts.push(mdWithPageNum);
     }
