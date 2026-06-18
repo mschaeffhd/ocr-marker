@@ -5,8 +5,12 @@ const CONFIG = {
     markerApiToken: '',
     model: 'alleskoenner-schnell-qwen36-35b-a3b',
     ocrBackend: 'marker',
+    chandraInstance: 'local',
     chandraUrl: 'http://127.0.0.1:1234',
     chandraModel: 'chandra-ocr-2-nvfp4-mlx',
+    chandraServerUrl: 'https://openwebui.sbbz-ilvesheim.de/api/chat/completions',
+    chandraServerModel: 'chandra-ocr-2-nvfp4-mlx',
+    chandraServerApiKey: '',
 };
 
 // Default prompt for image recognition
@@ -343,11 +347,24 @@ function chandraHtmlToMarkdown(html) {
         return '#'.repeat(Math.min(level, 4)) + ' ';
     }
 
+    function tblToMd(tbl) {
+        const rows = Array.from(tbl.querySelectorAll('tr'));
+        if (!rows.length) return tbl.textContent.trim();
+        const mdRows = rows.map(row =>
+            '| ' + Array.from(row.querySelectorAll('th,td')).map(c => innerText(c).trim()).join(' | ') + ' |'
+        );
+        const colCount = rows[0].querySelectorAll('th,td').length || 1;
+        mdRows.splice(1, 0, '| ' + Array(colCount).fill('---').join(' | ') + ' |');
+        return '\n' + mdRows.join('\n') + '\n';
+    }
+
     function nodeToMd(node) {
         if (node.nodeType === Node.TEXT_NODE) return node.textContent;
         if (node.nodeType !== Node.ELEMENT_NODE) return '';
         const tag = node.tagName.toLowerCase();
         if (tag === 'math') return ' $' + node.textContent.trim() + '$ ';
+        if (tag === 'br') return '\n';
+        if (tag === 'p') return Array.from(node.childNodes).map(nodeToMd).join('') + '\n\n';
         if (tag === 'b' || tag === 'strong') return '**' + Array.from(node.childNodes).map(nodeToMd).join('') + '**';
         if (tag === 'i' || tag === 'em') return '*' + Array.from(node.childNodes).map(nodeToMd).join('') + '*';
         if (tag === 'ol') {
@@ -363,9 +380,7 @@ function chandraHtmlToMarkdown(html) {
                 .map(li => `- ${Array.from(li.childNodes).map(nodeToMd).join('').trim()}`)
                 .join('\n') + '\n';
         }
-        if (tag === 'table') {
-            return '\n' + node.outerHTML.replace(/<math>([\s\S]*?)<\/math>/g, (_, c) => '$' + c.trim() + '$') + '\n';
-        }
+        if (tag === 'table') return tblToMd(node);
         return Array.from(node.childNodes).map(nodeToMd).join('');
     }
 
@@ -385,7 +400,7 @@ function chandraHtmlToMarkdown(html) {
                 break;
             }
             case 'Text': {
-                const t = innerText(block).trim();
+                const t = nodeToMd(block).trim();
                 if (t) parts.push(t + '\n');
                 break;
             }
@@ -406,17 +421,8 @@ function chandraHtmlToMarkdown(html) {
             }
             case 'Table': {
                 const tbl = block.querySelector('table');
-                if (tbl) {
-                    const rows = Array.from(tbl.querySelectorAll('tr'));
-                    if (rows.length) {
-                        const mdRows = rows.map(row =>
-                            '| ' + Array.from(row.querySelectorAll('th,td')).map(c => innerText(c).trim()).join(' | ') + ' |'
-                        );
-                        const colCount = tbl.querySelector('tr')?.querySelectorAll('th,td').length || 1;
-                        mdRows.splice(1, 0, '| ' + Array(colCount).fill('---').join(' | ') + ' |');
-                        parts.push('\n' + mdRows.join('\n') + '\n');
-                    }
-                } else { const tb = innerText(block).trim(); if (tb) parts.push(tb); }
+                if (tbl) parts.push(tblToMd(tbl));
+                else { const tb = nodeToMd(block).trim(); if (tb) parts.push(tb); }
                 break;
             }
             case 'Figure':
@@ -452,8 +458,17 @@ function chandraHtmlToMarkdown(html) {
 async function convertWithChandra() {
     if (!pdfDocument) throw new Error('Kein PDF geladen');
 
-    const chandraUrl = ($('#chandraUrl')?.value || CONFIG.chandraUrl || 'http://127.0.0.1:1234').replace(/\/$/, '');
-    const chandraModel = $('#chandraModel')?.value || CONFIG.chandraModel || 'chandra-ocr-2-nvfp4-mlx';
+    const instance = $('#chandraInstance')?.value || CONFIG.chandraInstance || 'local';
+    const isServer = instance === 'server';
+    const chandraEndpoint = isServer
+        ? ($('#chandraServerUrl')?.value || CONFIG.chandraServerUrl)
+        : ($('#chandraUrl')?.value || CONFIG.chandraUrl || 'http://127.0.0.1:1234').replace(/\/$/, '') + '/v1/chat/completions';
+    const chandraModel = isServer
+        ? ($('#chandraServerModel')?.value || CONFIG.chandraServerModel || 'chandra-ocr-2-nvfp4-mlx')
+        : ($('#chandraModel')?.value || CONFIG.chandraModel || 'chandra-ocr-2-nvfp4-mlx');
+    const chandraApiKey = isServer
+        ? ($('#chandraServerApiKey')?.value || CONFIG.chandraServerApiKey || '')
+        : null;
     const pageRange = $('#pageRange')?.value?.trim() || '';
     const pages = parsePageRange(pageRange, pdfTotalPages);
 
@@ -469,8 +484,9 @@ async function convertWithChandra() {
         const textContent = await page.getTextContent();
         const rawText = textContent.items.map(i => i.str + (i.hasEOL ? '\n' : ' ')).join('');
 
-        const firstItem = textContent.items[0]?.str?.trim() || '';
-        const pdfPageLabel = /^\d{1,4}$/.test(firstItem) ? firstItem : null;
+        const pdfPageLabel = textContent.items.slice(0, 5)
+            .map(i => i.str.trim())
+            .find(s => /^\d{1,4}$/.test(s)) || null;
 
         const viewport = page.getViewport({ scale: 2.0 });
         const canvas = document.createElement('canvas');
@@ -479,11 +495,14 @@ async function convertWithChandra() {
         await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
         const imageBase64 = canvas.toDataURL('image/png').split(',')[1];
 
-        const prompt = `The following raw text was extracted directly from this PDF page and is the authoritative source for all symbols, variables, and content:\n\n<raw_text>\n${rawText}\n</raw_text>\n\nConvert this page to well-formatted markdown with LaTeX for all mathematical expressions. Rules:\n- Trust the raw text above for every character and symbol — do NOT substitute, interpret, or correct anything, especially mathematical variables like n, k, ∞.\n- Use the image for layout, structure, and numbered/bulleted list detection.\n- Preserve numbered lists (1. 2. 3.) exactly — never merge list items into prose.\n- For every figure, chart, diagram, or illustration visible in the image: always provide a detailed description IN GERMAN of what is visually shown. A caption label like "Histogramm:" is NOT a description — look at the image and describe the actual visual content. Write the img alt attribute in German.`;
+        const prompt = `The following raw text was extracted directly from this PDF page and is the authoritative source for all symbols, variables, and content:\n\n<raw_text>\n${rawText}\n</raw_text>\n\nConvert this page to well-formatted markdown with LaTeX for all mathematical expressions. Rules:\n- Trust the raw text above for every character and symbol — do NOT substitute, interpret, or correct anything, especially mathematical variables like n, k, ∞.\n- Use the image for layout, structure, and numbered/bulleted list detection.\n- Preserve numbered lists (1. 2. 3.) exactly — never merge list items into prose.\n- For every figure, chart, diagram, or illustration visible in the image: always provide a detailed description of what is visually shown. A caption label like "Histogramm:" is NOT a description — look at the image and describe the actual visual content.\n- CRITICAL: Write ALL image descriptions and img alt attributes in GERMAN (Deutsch). Never use English for any description. Example: not "Graph showing..." but "Koordinatensystem mit..."`;
 
-        const response = await fetch(chandraUrl + '/v1/chat/completions', {
+        const fetchHeaders = { 'Content-Type': 'application/json' };
+        if (chandraApiKey) fetchHeaders['Authorization'] = 'Bearer ' + chandraApiKey;
+
+        const response = await fetch(chandraEndpoint, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: fetchHeaders,
             body: JSON.stringify({
                 model: chandraModel,
                 messages: [{ role: 'user', content: [
@@ -519,6 +538,15 @@ function updateBackendUI() {
     const chandraDiv = $('#chandraSettings');
     if (markerDiv) markerDiv.style.display = backend === 'marker' ? '' : 'none';
     if (chandraDiv) chandraDiv.style.display = backend === 'chandra' ? '' : 'none';
+    updateChandraInstanceUI();
+}
+
+function updateChandraInstanceUI() {
+    const instance = $('#chandraInstance')?.value || 'local';
+    const localDiv = $('#chandraLocalSettings');
+    const serverDiv = $('#chandraServerSettings');
+    if (localDiv) localDiv.style.display = instance === 'local' ? '' : 'none';
+    if (serverDiv) serverDiv.style.display = instance === 'server' ? '' : 'none';
 }
 
 // Step 3: Describe images with OpenWebUI
@@ -1820,8 +1848,12 @@ $$('.toolbar-btn').forEach(btn => {
 function saveConfig() {
     const configData = {
         ocrBackend: $('#ocrBackend')?.value || 'marker',
+        chandraInstance: $('#chandraInstance')?.value || 'local',
         chandraUrl: $('#chandraUrl')?.value || 'http://127.0.0.1:1234',
         chandraModel: $('#chandraModel')?.value || 'chandra-ocr-2-nvfp4-mlx',
+        chandraServerUrl: $('#chandraServerUrl')?.value || 'https://openwebui.sbbz-ilvesheim.de/api/chat/completions',
+        chandraServerModel: $('#chandraServerModel')?.value || 'chandra-ocr-2-nvfp4-mlx',
+        chandraServerApiKey: $('#chandraServerApiKey')?.value || '',
         markerServerUrl: $('#markerServerUrl')?.value || '',
         markerApiToken: $('#markerApiToken')?.value || '',
         openwebuiUrl: $('#openwebuiUrl')?.value || '',
@@ -1899,8 +1931,13 @@ function loadConfig() {
             }
 
             if ($('#ocrBackend')) $('#ocrBackend').value = config.ocrBackend || 'marker';
+            if ($('#chandraInstance')) $('#chandraInstance').value = config.chandraInstance || 'local';
             if ($('#chandraUrl')) $('#chandraUrl').value = config.chandraUrl || 'http://127.0.0.1:1234';
             if ($('#chandraModel')) $('#chandraModel').value = config.chandraModel || 'chandra-ocr-2-nvfp4-mlx';
+            if ($('#chandraServerUrl')) $('#chandraServerUrl').value = config.chandraServerUrl || 'https://openwebui.sbbz-ilvesheim.de/api/chat/completions';
+            if ($('#chandraServerModel')) $('#chandraServerModel').value = config.chandraServerModel || 'chandra-ocr-2-nvfp4-mlx';
+            if ($('#chandraServerApiKey')) $('#chandraServerApiKey').value = config.chandraServerApiKey || '';
+            updateChandraInstanceUI();
             updateBackendUI();
             if ($('#markerServerUrl')) $('#markerServerUrl').value = config.markerServerUrl || CONFIG.markerServerUrl;
             if ($('#markerApiToken')) $('#markerApiToken').value = config.markerApiToken || '';

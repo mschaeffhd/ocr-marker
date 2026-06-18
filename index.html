@@ -291,14 +291,42 @@ Beschreibung: …  / Bildtext: …
 
                         <div id="chandraSettings" style="display:none">
                             <div class="form-group">
-                                <label for="chandraUrl">LM Studio URL</label>
-                                <input type="text" id="chandraUrl" value="http://127.0.0.1:1234"
-                                    placeholder="http://127.0.0.1:1234">
+                                <label for="chandraInstance">Chandra-Instanz</label>
+                                <select id="chandraInstance">
+                                    <option value="local">Lokal (LM Studio)</option>
+                                    <option value="server">NVIDIA-Server (OpenWebUI)</option>
+                                </select>
                             </div>
-                            <div class="form-group">
-                                <label for="chandraModel">Chandra-Modell</label>
-                                <input type="text" id="chandraModel" value="chandra-ocr-2-nvfp4-mlx"
-                                    placeholder="chandra-ocr-2-nvfp4-mlx">
+                            <div id="chandraLocalSettings">
+                                <div class="form-group">
+                                    <label for="chandraUrl">LM Studio URL</label>
+                                    <input type="text" id="chandraUrl" value="http://127.0.0.1:1234"
+                                        placeholder="http://127.0.0.1:1234">
+                                </div>
+                                <div class="form-group">
+                                    <label for="chandraModel">Chandra-Modell</label>
+                                    <input type="text" id="chandraModel" value="chandra-ocr-2-nvfp4-mlx"
+                                        placeholder="chandra-ocr-2-nvfp4-mlx">
+                                </div>
+                            </div>
+                            <div id="chandraServerSettings" style="display:none">
+                                <div class="form-group">
+                                    <label for="chandraServerUrl">Server-URL</label>
+                                    <input type="text" id="chandraServerUrl"
+                                        value="https://openwebui.sbbz-ilvesheim.de/api/chat/completions"
+                                        placeholder="https://…/api/chat/completions">
+                                </div>
+                                <div class="form-group">
+                                    <label for="chandraServerModel">Chandra-Modell</label>
+                                    <input type="text" id="chandraServerModel" value="chandra-ocr-2-nvfp4-mlx"
+                                        placeholder="chandra-ocr-2-nvfp4-mlx">
+                                </div>
+                                <div class="form-group">
+                                    <label for="chandraServerApiKey">API-Key</label>
+                                    <input type="password" id="chandraServerApiKey"
+                                        value=""
+                                        placeholder="sk-...">
+                                </div>
                             </div>
                         </div>
                     </div>
