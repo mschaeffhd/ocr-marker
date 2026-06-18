@@ -8,9 +8,7 @@ const CONFIG = {
     chandraInstance: 'local',
     chandraUrl: 'http://127.0.0.1:1234',
     chandraModel: 'chandra-ocr-2-nvfp4-mlx',
-    chandraServerUrl: 'https://openwebui.sbbz-ilvesheim.de/api/chat/completions',
-    chandraServerModel: 'chandra-ocr-2-nvfp4-mlx',
-    chandraServerApiKey: '',
+    chandraServerModel: 'fredrezones55/chandra-ocr-2:patch',
 };
 
 // Default prompt for image recognition
@@ -460,14 +458,15 @@ async function convertWithChandra() {
 
     const instance = $('#chandraInstance')?.value || CONFIG.chandraInstance || 'local';
     const isServer = instance === 'server';
+    const openwebuiBase = ($('#openwebuiUrl')?.value || CONFIG.openwebuiUrl || '').replace(/\/+$/, '');
     const chandraEndpoint = isServer
-        ? ($('#chandraServerUrl')?.value || CONFIG.chandraServerUrl)
+        ? openwebuiBase + '/chat/completions'
         : ($('#chandraUrl')?.value || CONFIG.chandraUrl || 'http://127.0.0.1:1234').replace(/\/$/, '') + '/v1/chat/completions';
     const chandraModel = isServer
-        ? ($('#chandraServerModel')?.value || CONFIG.chandraServerModel || 'chandra-ocr-2-nvfp4-mlx')
+        ? ($('#chandraServerModel')?.value || CONFIG.chandraServerModel || 'fredrezones55/chandra-ocr-2:patch')
         : ($('#chandraModel')?.value || CONFIG.chandraModel || 'chandra-ocr-2-nvfp4-mlx');
     const chandraApiKey = isServer
-        ? ($('#chandraServerApiKey')?.value || CONFIG.chandraServerApiKey || '')
+        ? ($('#apiToken')?.value || '')
         : null;
     const pageRange = $('#pageRange')?.value?.trim() || '';
     const pages = parsePageRange(pageRange, pdfTotalPages);
@@ -493,7 +492,7 @@ async function convertWithChandra() {
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-        const imageBase64 = canvas.toDataURL('image/png').split(',')[1];
+        const imageBase64 = canvas.toDataURL('image/jpeg', 0.92).split(',')[1];
 
         const prompt = `The following raw text was extracted directly from this PDF page and is the authoritative source for all symbols, variables, and content:\n\n<raw_text>\n${rawText}\n</raw_text>\n\nConvert this page to well-formatted markdown with LaTeX for all mathematical expressions. Rules:\n- Trust the raw text above for every character and symbol — do NOT substitute, interpret, or correct anything, especially mathematical variables like n, k, ∞.\n- Use the image for layout, structure, and numbered/bulleted list detection.\n- Preserve numbered lists (1. 2. 3.) exactly — never merge list items into prose.\n- For every figure, chart, diagram, or illustration visible in the image: always provide a detailed description of what is visually shown. A caption label like "Histogramm:" is NOT a description — look at the image and describe the actual visual content.\n- CRITICAL: Write ALL image descriptions and img alt attributes in GERMAN (Deutsch). Never use English for any description. Example: not "Graph showing..." but "Koordinatensystem mit..."`;
 
@@ -505,19 +504,21 @@ async function convertWithChandra() {
             headers: fetchHeaders,
             body: JSON.stringify({
                 model: chandraModel,
+                stream: false,
                 messages: [{ role: 'user', content: [
                     { type: 'text', text: prompt },
-                    { type: 'image_url', image_url: { url: 'data:image/png;base64,' + imageBase64 } }
+                    { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + imageBase64 } }
                 ]}],
-                max_tokens: 4096,
-                temperature: 0
+                max_tokens: 4096
             })
         });
 
         if (!response.ok) throw new Error(`Chandra API Fehler (Seite ${pageNum}): ${await response.text()}`);
 
-        const result = await response.json();
-        const md = chandraHtmlToMarkdown(result.choices[0].message.content);
+        const responseText = await response.text();
+        const result = JSON.parse(responseText);
+        const msg = result.choices[0].message;
+        const md = chandraHtmlToMarkdown(msg.content || msg.reasoning_content || '');
         const mdWithPageNum = pdfPageLabel ? `((${pdfPageLabel}))\n\n${md}` : md;
         markdownParts.push(mdWithPageNum);
     }
@@ -544,9 +545,9 @@ function updateBackendUI() {
 function updateChandraInstanceUI() {
     const instance = $('#chandraInstance')?.value || 'local';
     const localDiv = $('#chandraLocalSettings');
-    const serverDiv = $('#chandraServerSettings');
+    const ocrModelSection = $('#chandraOcrModelSection');
     if (localDiv) localDiv.style.display = instance === 'local' ? '' : 'none';
-    if (serverDiv) serverDiv.style.display = instance === 'server' ? '' : 'none';
+    if (ocrModelSection) ocrModelSection.style.display = instance === 'server' ? '' : 'none';
 }
 
 // Step 3: Describe images with OpenWebUI
@@ -1851,9 +1852,7 @@ function saveConfig() {
         chandraInstance: $('#chandraInstance')?.value || 'local',
         chandraUrl: $('#chandraUrl')?.value || 'http://127.0.0.1:1234',
         chandraModel: $('#chandraModel')?.value || 'chandra-ocr-2-nvfp4-mlx',
-        chandraServerUrl: $('#chandraServerUrl')?.value || 'https://openwebui.sbbz-ilvesheim.de/api/chat/completions',
-        chandraServerModel: $('#chandraServerModel')?.value || 'chandra-ocr-2-nvfp4-mlx',
-        chandraServerApiKey: $('#chandraServerApiKey')?.value || '',
+        chandraServerModel: $('#chandraServerModel')?.value || 'fredrezones55/chandra-ocr-2:patch',
         markerServerUrl: $('#markerServerUrl')?.value || '',
         markerApiToken: $('#markerApiToken')?.value || '',
         openwebuiUrl: $('#openwebuiUrl')?.value || '',
@@ -1934,9 +1933,7 @@ function loadConfig() {
             if ($('#chandraInstance')) $('#chandraInstance').value = config.chandraInstance || 'local';
             if ($('#chandraUrl')) $('#chandraUrl').value = config.chandraUrl || 'http://127.0.0.1:1234';
             if ($('#chandraModel')) $('#chandraModel').value = config.chandraModel || 'chandra-ocr-2-nvfp4-mlx';
-            if ($('#chandraServerUrl')) $('#chandraServerUrl').value = config.chandraServerUrl || 'https://openwebui.sbbz-ilvesheim.de/api/chat/completions';
-            if ($('#chandraServerModel')) $('#chandraServerModel').value = config.chandraServerModel || 'chandra-ocr-2-nvfp4-mlx';
-            if ($('#chandraServerApiKey')) $('#chandraServerApiKey').value = config.chandraServerApiKey || '';
+            if ($('#chandraServerModel')) $('#chandraServerModel').value = config.chandraServerModel || 'fredrezones55/chandra-ocr-2:patch';
             updateChandraInstanceUI();
             updateBackendUI();
             if ($('#markerServerUrl')) $('#markerServerUrl').value = config.markerServerUrl || CONFIG.markerServerUrl;
@@ -2030,6 +2027,7 @@ $$('input, select, textarea').forEach(el => {
 
 // Load models when OpenWebUI URL changes
 on('#ocrBackend', 'change', updateBackendUI);
+on('#chandraInstance', 'change', updateChandraInstanceUI);
 
 on('#openwebuiUrl', 'input', debounce(async function() {
     const url = this.value.trim();
@@ -2046,22 +2044,45 @@ on('#openwebuiUrl', 'input', debounce(async function() {
 on('#btnReloadModels', 'click', async function() {
     const urlInput = $('#openwebuiUrl');
     if (!urlInput) return;
-    
     const url = urlInput.value.trim();
-    if (!url) {
-        debugLog('Bitte zuerst OpenWebUI URL eingeben.', 'warning');
-        return;
-    }
-    
-    // Visual feedback
+    if (!url) { debugLog('Bitte zuerst OpenWebUI URL eingeben.', 'warning'); return; }
     this.textContent = '⏳';
     this.disabled = true;
-    
     await loadModels(url);
-    
+    const isChandraServer = $('#chandraInstance')?.value === 'server'
+        && $('#ocrBackend')?.value === 'chandra';
+    if (isChandraServer) await loadChandraServerModels();
     this.textContent = '🔄';
     this.disabled = false;
 });
+
+async function loadChandraServerModels() {
+    const select = $('#chandraServerModel');
+    if (!select) return;
+    const fullUrl = ($('#openwebuiUrl')?.value || CONFIG.openwebuiUrl || '').replace(/\/+$/, '');
+    const apiKey = $('#apiToken')?.value?.trim() || '';
+    if (!fullUrl) { select.innerHTML = '<option value="">Bitte Server-URL eingeben</option>'; return; }
+    select.innerHTML = '<option value="">Lade Modelle…</option>';
+    try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
+        const response = await fetch(fullUrl + '/v1/models', { headers });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        const models = Array.isArray(data) ? data : (data.data?.map(m => m.id) || data.models || []);
+        if (!models.length) { select.innerHTML = '<option value="">Keine Modelle gefunden</option>'; return; }
+        const saved = select.value || CONFIG.chandraServerModel;
+        select.innerHTML = '';
+        models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m; opt.textContent = m;
+            select.appendChild(opt);
+        });
+        if (saved && models.includes(saved)) select.value = saved;
+    } catch (e) {
+        select.innerHTML = `<option value="">Fehler: ${e.message.substring(0, 60)}</option>`;
+    }
+}
 
 async function loadModels(baseUrl) {
     const modelSelect = $('#modelSelect');

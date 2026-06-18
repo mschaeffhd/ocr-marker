@@ -251,35 +251,16 @@ Beschreibung: …  / Bildtext: …
                     </div>
                     <div class="panel-body">
                         <div class="form-group">
-                            <label for="modelSelect">KI-Modell</label>
-                            <select id="modelSelect">
-                                <option value="">Lade Modelle...</option>
-                            </select>
-                        </div>
-                        <div style="text-align: right; margin-top: -8px;">
-                            <button class="btn btn-text" id="btnReloadModels" title="Modelle neu laden">🔄 Modelle neu
-                                laden</button>
-                        </div>
-                        <div class="form-group">
-                            <label for="openwebuiUrl">Base URL LLM</label>
-                            <input type="text" id="openwebuiUrl" value="https://openwebui.sbbz-ilvesheim.de/api"
-                                placeholder="https://openwebui.sbbz-ilvesheim.de/api">
-                        </div>
-                        <div class="form-group">
-                            <label for="apiToken">API-Key LLM</label>
-                            <input type="password" id="apiToken" value="" placeholder="sk-...">
-                        </div>
-                        <div class="form-group">
                             <label for="ocrBackend">OCR-Backend</label>
                             <select id="ocrBackend">
                                 <option value="marker">Marker (Server)</option>
-                                <option value="chandra">Chandra (Lokal · LM Studio)</option>
+                                <option value="chandra">Chandra</option>
                             </select>
                         </div>
 
                         <div id="markerSettings">
                             <div class="form-group">
-                                <label for="markerServerUrl">Base URL Marker</label>
+                                <label for="markerServerUrl">Marker Server URL</label>
                                 <input type="text" id="markerServerUrl" value="./api/marker/upload"
                                     placeholder="./api/marker/upload">
                             </div>
@@ -309,25 +290,35 @@ Beschreibung: …  / Bildtext: …
                                         placeholder="chandra-ocr-2-nvfp4-mlx">
                                 </div>
                             </div>
-                            <div id="chandraServerSettings" style="display:none">
-                                <div class="form-group">
-                                    <label for="chandraServerUrl">Server-URL</label>
-                                    <input type="text" id="chandraServerUrl"
-                                        value="https://openwebui.sbbz-ilvesheim.de/api/chat/completions"
-                                        placeholder="https://…/api/chat/completions">
-                                </div>
-                                <div class="form-group">
-                                    <label for="chandraServerModel">Chandra-Modell</label>
-                                    <input type="text" id="chandraServerModel" value="chandra-ocr-2-nvfp4-mlx"
-                                        placeholder="chandra-ocr-2-nvfp4-mlx">
-                                </div>
-                                <div class="form-group">
-                                    <label for="chandraServerApiKey">API-Key</label>
-                                    <input type="password" id="chandraServerApiKey"
-                                        value=""
-                                        placeholder="sk-...">
-                                </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="openwebuiUrl">OpenWebUI URL</label>
+                            <input type="text" id="openwebuiUrl" value="https://openwebui.sbbz-ilvesheim.de/api"
+                                placeholder="https://openwebui.sbbz-ilvesheim.de/api">
+                        </div>
+                        <div class="form-group">
+                            <label for="apiToken">API-Key</label>
+                            <input type="password" id="apiToken" value="" placeholder="sk-...">
+                        </div>
+
+                        <div id="chandraOcrModelSection" style="display:none">
+                            <div class="form-group">
+                                <label for="chandraServerModel">Chandra OCR-Modell</label>
+                                <select id="chandraServerModel">
+                                    <option value="fredrezones55/chandra-ocr-2:patch">fredrezones55/chandra-ocr-2:patch</option>
+                                </select>
                             </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="modelSelect">KI-Modell (Bildbeschreibung)</label>
+                            <select id="modelSelect">
+                                <option value="">Lade Modelle...</option>
+                            </select>
+                        </div>
+                        <div style="text-align: right; margin-top: -8px;">
+                            <button class="btn btn-text" id="btnReloadModels" title="Modelle neu laden">🔄 Modelle neu laden</button>
                         </div>
                     </div>
                 </section>
